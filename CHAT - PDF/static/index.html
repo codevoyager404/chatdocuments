@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <!-- Βασικά meta tags -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Απενεργοποίηση cache για development -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Συνομιλία με τα Έγγραφά σας</title>
+  <link rel="stylesheet" href="/static/css/chat.css" id="css-link" />
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Κεφαλίδα με controls -->
+    <header class="card" aria-label="Κεφαλίδα συνομιλίας">
+      <div class="title">
+        <span class="logo-panel">
+          <img src="/static/img/uop1_logo.png" class="badge-logo" alt="Λογότυπο Πανεπιστημίου" onerror="this.hidden=true" />
+        </span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+      <div class="actions">
+        <!-- Toggle για απενεργοποίηση LLM -->
+        <input type="checkbox" id="disableLLM" hidden />
+        <button class="icon toggle" id="disableLLMBtn" aria-pressed="false" title="Απαντήσεις μόνο από αποσπάσματα (χωρίς AI)">Χωρίς AI</button>
+        <!-- Toggle για extractive mode -->
+        <input type="checkbox" id="llmExtractive" hidden />
+        <button class="icon toggle" id="llmExtractiveBtn" aria-pressed="false" title="Απαντήσεις με extractive AI">Λειτουργία Extractive</button>
+        <button class="icon toggle" id="sidebarBtn" aria-pressed="false">Ιστορικό</button>
+        <button class="icon toggle" id="indexPanelBtn" aria-pressed="false">Έγγραφα</button>
+        <button class="icon" id="themeBtn" aria-label="Εναλλαγή θέματος" title="Σκούρο / Φωτεινό">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z" stroke="currentColor" stroke-width="1.6"/></svg>
+          Θέμα
+        </button>
+        <button class="icon" id="newChatBtnHeader" aria-label="Νέα συνομιλία" title="Ξεκινήστε νέα συνομιλία">Νέα Συνομιλία</button>
+      </div>
+    </header>
+
+    <!-- Sidebar για ιστορικό συνομιλιών -->
+    <aside class="sidebar" id="sidebar" aria-label="Ιστορικό συνομιλιών">
+      <div id="historyList"></div>
+    </aside>
+
+    <!-- Index Panel για ανεβασμένα έγγραφα -->
+    <aside class="index-panel" id="indexPanel" aria-label="Ανεβασμένα έγγραφα">
+      <div class="index-header">
+        <h3>Έγγραφα στη Συνεδρία</h3>
+        <button class="icon-btn" id="closeIndexPanel" aria-label="Κλείσιμο" title="Κλείσιμο">×</button>
+      </div>
+      <div class="index-content" id="indexContent">
+        <div class="index-empty">
+          <p>Δεν έχουν ανέβει έγγραφα ακόμα</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Κύρια περιοχή συνομιλίας -->
+    <main class="chat card" id="chat" aria-live="polite" aria-label="Ροή μηνυμάτων">
+      <div class="stream" id="stream">
+        <!-- Indicator για typing animation -->
+        <div class="msg-row them hidden" id="typingRow">
+          <div class="bubble"><span class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer με input και file upload -->
+    <footer class="composer card" aria-label="Περιοχή σύνθεσης μηνύματος">
+      <!-- Slider για attachments -->
+      <div class="attachments-slider" id="attachmentsWrap" hidden>
+        <button class="att-nav" id="attPrev" aria-label="Προηγούμενο" title="Προβολή προηγούμενου αρχείου">‹</button>
+        <div class="att-track" id="attachmentsTrack"></div>
+        <button class="att-nav" id="attNext" aria-label="Επόμενο" title="Προβολή επόμενου αρχείου">›</button>
+      </div>
+      <div class="composer-inner">
+        <div class="composer-input">
+          <button class="icon" id="attachBtn" title="Επισύναψη εγγράφων" aria-label="Επισύναψη εγγράφων">📎</button>
+          <input type="file" id="fileInput" accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" multiple hidden />
+          <textarea id="input" rows="1" placeholder="Γράψτε την ερώτησή σας..." aria-label="Πεδίο κειμένου"></textarea>
+          <button class="icon" id="sendBtn" title="Αποστολή μηνύματος" aria-label="Αποστολή μηνύματος" disabled>➤</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Context menu για δεξί κλικ -->
+  <div id="ctxMenu" class="ctx-menu" role="menu" hidden>
+    <button class="ctx-menu-item" data-action="rename" role="menuitem">Μετονομασία</button>
+    <button class="ctx-menu-item" data-action="copy" role="menuitem">Αντιγραφή Ερώτησης/Απάντησης</button>
+    <button class="ctx-menu-item" data-action="delete" role="menuitem">Διαγραφή Συνομιλίας</button>
+  </div>
+
+  <script src="/static/js/chat.js" id="js-script"></script>
+</body>
+</html>

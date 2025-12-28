@@ -1,0 +1,911 @@
+/* Ρυθμίσεις χρωμάτων για dark theme */
+:root{
+  --bg: rgb(0,0,0);
+  --panel: rgb(10,10,10);
+  --panel-2: #151515;
+  --text: #f0f0f0;
+  --muted: #9a9a9a;
+  --border: rgba(255,255,255,.15);
+  --border-2: rgba(255,255,255,.08);
+  --accent: #56b6ff;
+  --active: #3a82f7;
+  --danger: #ef4444;
+  --accent-2: #9f7aea;
+  --shadow: 0 10px 28px rgba(0,0,0,.55);
+}
+
+/* Ρυθμίσεις χρωμάτων για light theme */
+.light{
+  --bg: #f6f8fb;
+  --panel: #ffffff;
+  --panel-2: #f6f8fb;
+  --muted: #5b6b78;
+  --text: #0b0f14;
+  --accent: #005eff;
+  --accent-2: #7b3ff8;
+  --shadow: 0 5px 18px rgba(16,24,40,.08), 0 1px 4px rgba(16,24,40,.06);
+}
+
+/* Βασικά styles για σελίδα */
+html,body{height:100%;}
+body{
+  margin:0;
+  font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Noto Sans, "Apple Color Emoji","Segoe UI Emoji";
+  background: var(--bg);
+  color: var(--text);
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* Κεντρική εφαρμογή */
+.app{
+  width:min(1100px, 100%);
+  height:min(780px, 100vh);
+  display:grid; grid-template-rows: auto 1fr auto;
+  gap:12px; padding:16px;
+}
+
+/* γενικά */
+.card{
+  background: var(--panel);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+/* Απόκρυψη στοιχείων */
+.hidden{ display:none !important; }
+
+/* Header της εφαρμογής */
+header.card{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; gap:10px;
+}
+header .title{ display:flex; align-items:center; gap:12px; }
+
+/* Λογότυπο */
+.badge-logo{
+  height:50px; width:auto; object-fit:contain;
+  vertical-align:middle; margin-right:0;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.25));
+}
+.light .badge-logo{ filter:none; }
+
+/* Panel με logo */
+.logo-panel{
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 14px;
+  position: relative;
+  box-shadow: 0 8px 20px rgba(0,0,0,.25);
+}
+.logo-panel::after{
+  content:"";
+  position:absolute; left:10px; right:10px; bottom:-1px;
+  height:3px; border-radius: 2px;
+ 
+}
+.logo-panel .badge-logo{
+  height: 44px; width: auto; object-fit: contain;
+  filter: none !important;
+}
+
+/* Κουμπιά / ενέργειες */
+.actions{ display:flex; gap:4px; align-items:center; }
+.btn, button.icon{
+  appearance:none; border:1px solid var(--border);
+  background:var(--panel-2); color:var(--text);
+  border-radius:12px; padding:10px 12px;
+  display:inline-flex; align-items:center; gap:8px;
+  cursor:pointer; transition:.2s;
+}
+.btn:hover, button.icon:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0,0,0,.25);
+}
+
+/* Περιοχή συνομιλίας */
+.chat.card{ padding:16px; overflow:auto; }
+.stream{ display:flex; flex-direction:column; gap:14px; }
+
+/* Σειρά μηνυμάτων */
+.msg-row{ display:flex; gap:10px; align-items:flex-end; }
+.msg-row.them{ justify-content:flex-start; align-items:flex-start; flex-direction: column; }
+.msg-row.me{ justify-content:flex-end; }
+
+/* Όταν υπάρχει error στο δικό μου μήνυμα */
+.msg-row.me.is-error{ flex-direction: column; align-items: flex-end; }
+.msg-row.me.is-error .bubble{ margin-bottom: 0; }
+
+/* Βασικό στυλ για όλα τα bubbles */
+.msg-row .bubble {
+  max-width: 75%;
+  padding: 12px 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+/* Μηνύματα άλλου (χωρίς bubble) */
+.msg-row.them .bubble {
+  max-width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 8px 0;
+  margin: 0;
+}
+
+/* Δικά μου μηνύματα */
+.msg-row.me .bubble {
+  border-top-right-radius: 6px;
+  background: #000;
+  color: #fff;
+  border: 1px solid #333;
+}
+
+/* Δικά μου bubbles σε light theme */
+.light .msg-row.me .bubble {
+  background: #fff;
+  color: #000;
+  border: 1px solid #e5e7eb;
+}
+
+/* Στυλ για error bubbles */
+.bubble.is-error,
+.bubble.error {
+  background: #000;
+  border: 2px solid #ef4444;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1);
+}
+
+/* Error ειδικά στα δικά μου */
+.msg-row.me .bubble.is-error {
+  background: #000; color: #fff;
+  border: 2px solid #ef4444;
+}
+
+/* Error bubbles στο light theme */
+.light .bubble.is-error,
+.light .bubble.error {
+  background: #fff; color: #000;
+  border: 2px solid #ef4444;
+}
+.light .msg-row.me .bubble.is-error {
+  background: #fff; color: #000;
+  border: 2px solid #ef4444;
+}
+
+/* Μικρή σημείωση κάτω από error bubble */
+.msg-row.me.is-error .status-note {
+  display: block; margin-top: 6px;
+  font-weight: 600; color: var(--danger);
+  text-align: right; font-size: 14px; line-height: 1.4;
+  max-width: 75%; padding: 4px 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Κρύβει metadata */
+.msg-row .meta{ display:none !important; }
+.me .meta{ display:none !important; }
+
+/* Εφέ typing */
+.typing{ display:inline-flex; align-items:center; gap:6px; color:var(--muted); }
+.typing .dot{ width:6px; height:6px; border-radius:50%; background: currentColor; opacity:.45; animation: blink 1.3s infinite; }
+.typing .dot:nth-child(2){ animation-delay:.2s }
+.typing .dot:nth-child(3){ animation-delay:.4s }
+@keyframes blink{ 0%,80%,100%{ opacity:.15 } 40%{ opacity:1 } }
+
+/* Περιοχή σύνθεσης μηνύματος */
+.composer.card {
+  display: grid; grid-template-rows: auto auto;
+  gap: 8px; padding: 10px 12px;
+  background: var(--panel);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* Εσωτερικό composer */
+.composer-inner{
+  background: var(--panel);
+  border: 1px solid var(--border-2);
+  border-radius: 16px;
+  padding: 8px;
+}
+.composer-inner:focus-within{
+  border-color: var(--active);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--active) 30%, transparent);
+}
+
+/* Slider για attachments */
+.attachments-slider{
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+  gap: 6px; padding: 8px; margin-bottom: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border-2);
+  border-radius: 16px;
+}
+
+/* Track με attachments */
+.att-track{
+  display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory;
+  padding: 6px; border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-2);
+}
+.att-track::-webkit-scrollbar{ height:6px; }
+.att-track::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.2); border-radius: 8px; }
+
+
+.file-chip{
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+  height: 40px; padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border-2);
+  box-shadow: none; color: var(--text);
+  scroll-snap-align: start;
+}
+
+/* File chip καταστάσεις */
+.file-chip.is-success{ border-color: #16a34a; box-shadow: 0 0 0 2px rgba(22,163,74,.15) inset; }
+.file-chip.is-error  { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, .18) inset; max-width: 100%; }
+.file-chip.is-pending{ opacity: .95; }
+.file-chip.is-uploading{ border-color: var(--active); box-shadow: 0 0 0 2px rgba(58,130,247,.18) inset; }
+.file-chip.is-canceled{ border-color: rgba(255,255,255,.18); box-shadow: none; opacity: .6; }
+
+/* Εικονίδιο αρχείου */
+.file-chip .icon{
+  width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto;
+  display: grid; place-items: center; color: #fff;
+}
+.file-chip[data-kind="pdf"]  .icon{ background:#e74c3c; }
+.file-chip[data-kind="pptx"] .icon{ background:#f39c12; }
+.file-chip[data-kind="docx"] .icon{ background:#2980b9; }
+.file-chip[data-kind="image"] .icon{ background:#0ea5e9; }
+.file-chip[data-kind="audio"] .icon{ background:#a855f7; }
+.file-chip[data-kind="video"] .icon{ background:#22c55e; }
+.file-chip[data-kind="other"] .icon{ background:#6b7280; }
+
+/* Τίτλος + info αρχείου */
+.file-chip .meta{ min-width:0; display:flex; flex-direction:column; }
+.file-chip .name{
+  font-size: 14px; max-width: 140px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-chip .sub{ font-size:12px; opacity:.85; color: var(--muted, #9aa7b2); }
+
+/* Progress bar upload */
+.file-chip .progress{
+  position: relative; height: 3px; width: 90px;
+  border-radius: 3px; background: rgba(255,255,255,.08);
+  overflow: hidden; margin-left: 4px;
+}
+.file-chip .progress .fill{
+  position: absolute; left:0; top:0; bottom:0;
+  width: 0%; background: linear-gradient(90deg, var(--active), #7db2ff);
+}
+
+/* Κουμπί για διαγραφή αρχείου */
+.file-chip .close{
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-2);
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.file-chip .close:hover{
+  color: #fff; background: var(--panel-2); border-color: var(--border);
+}
+
+/* Κουμπί info */
+.file-chip .info {
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid #e74c3c;
+  background: transparent; color: #e74c3c;
+  font-size: 13px; cursor: pointer; margin-left: 4px; transition: .2s;
+}
+.file-chip .info:hover { background: rgba(231,76,60,0.15); }
+
+/* Κουμπί retry */
+.file-chip .retry{
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid #f59e0b;
+  background: transparent; color: #f59e0b;
+  font-size: 13px; cursor: pointer; transition: .2s;
+}
+.file-chip .retry:hover{ background: rgba(245,158,11,0.15); }
+.file-chip .retry:disabled{
+  opacity: 0.5; cursor: not-allowed;
+  background: rgba(245,158,11,0.05);
+}
+.file-chip .retry:disabled:hover{ background: rgba(245,158,11,0.05); }
+
+/* Κουμπί cancel */
+.file-chip .cancel{
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--active); color: var(--active);
+  background: transparent; font-size: 13px; cursor: pointer; transition: .2s;
+}
+.file-chip .cancel:hover{ background: rgba(58,130,247,0.15); }
+
+/* Απόκρυψη κουμπιών */
+.file-chip [hidden]{ display: none !important; }
+.file-chip:not(.is-error) .retry,
+.file-chip:not(.is-error) .info{ display: none !important; }
+.file-chip:not(.is-uploading) .cancel{ display: none !important; }
+
+/* Light theme για file chips */
+.light .file-chip{
+  background: var(--panel-2); border-color: var(--border); color: var(--text);
+  box-shadow: 0 8px 20px rgba(16,24,40,.10);
+}
+.light .file-chip .close{ color:#6b7280; }
+
+/* Toast notifications */
+.toast {
+  --toast-time: 5000ms;
+  position: fixed; right: 16px; top: 16px; z-index: 1000;
+  display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  border: 1px solid rgba(255,255,255,.14);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  color: var(--text); padding: 10px 12px;
+  border-radius: 14px; box-shadow: var(--shadow);
+  opacity: 0; transform: translateY(-10px); pointer-events: none;
+}
+.toast.show { animation: toast-in .45s cubic-bezier(.22,.8,.2,1) forwards; pointer-events:auto; }
+.toast.hide { animation: toast-out .28s ease forwards; }
+
+/* Toast icon */
+.toast .icon {
+  width: 28px; height: 28px; border-radius: 50%;
+  display:grid; place-items:center; color: #fff;
+  background: var(--danger);
+  box-shadow: 0 0 0 0 rgba(255,107,107,.35);
+  animation: pulse 1.6s infinite;
+}
+/* Περιεχόμενο toast */
+.toast .content { line-height: 1.25; }
+.toast .content strong { display:block; font-weight: 700; margin-bottom: 2px; }
+
+/* Κουμπιά μέσα στο toast */
+.toast .btn {
+  appearance:none; border:1px solid rgba(255,255,255,.14); background: var(--panel-2);
+  color: var(--text); border-radius: 10px; padding:6px 10px; cursor:pointer; font: inherit;
+}
+.toast .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+.toast .close { background: transparent; border: none; color: var(--muted); font-size: 18px; cursor: pointer; }
+
+/* Toast variants */
+.toast-success .icon {
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16,185,129,.35);
+}
+.toast-error .icon {
+  background: var(--danger);
+  box-shadow: 0 0 0 0 rgba(239,68,68,.35);
+}
+
+/* Κουμπί αποστολής */
+#sendBtn,
+.btn.primary{
+  background: var(--active);
+  border: 1px solid var(--active);
+  color: #fff;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+#sendBtn:hover{ filter: brightness(1.1); }
+#sendBtn.is-disabled,
+#sendBtn:disabled{ opacity: .5; cursor: default; filter: none; }
+
+/* Progress bar toast */
+.toast .progress {
+  grid-column: 1 / -1; height: 3px; border-radius: 3px; overflow: hidden;
+  background: rgba(255,255,255,.08); position: relative; margin-top: 6px;
+}
+.toast .progress::after{
+  content:""; position:absolute; left:0; top:0; bottom:0; width:100%;
+  background: linear-gradient(90deg, var(--danger), #ff9f9f);
+  animation: countdown var(--toast-time) linear forwards;
+}
+
+/* Animations toast */
+@keyframes toast-in { from{opacity:0; transform:translateY(-10px)} to{opacity:1; transform:translateY(0)} }
+@keyframes toast-out{ to{opacity:0; transform:translateY(-8px)} }
+@keyframes pulse     { 0%,100%{box-shadow:0 0 0 0 rgba(255,107,107,.35)} 50%{box-shadow:0 0 0 10px rgba(255,107,107,0)} }
+@keyframes countdown { to{ width:0% } }
+
+/* Μείωση animation για accessibility */
+@media (prefers-reduced-motion: reduce){
+  .toast.show,.toast.hide{ animation: none; opacity:1; transform:none; }
+  .toast .icon{ animation: none; }
+  .toast .progress::after{ animation-duration: calc(var(--toast-time) * 1.2); }
+}
+
+/* Layout με sidebar */
+.with-sidebar .app{ grid-template-columns: 280px 1fr; grid-template-rows: auto 1fr auto; }
+.sidebar{
+  display:none; padding:12px; background:var(--panel);
+  border:1px solid var(--border); border-radius:20px; box-shadow: var(--shadow);
+  overflow:auto;
+}
+.with-sidebar .sidebar{ display:block; }
+.with-sidebar header.card{ grid-column: 1 / -1; }
+.with-sidebar .chat.card{ grid-row: 2; grid-column: 2; }
+.with-sidebar .composer.card{ grid-row: 3; grid-column: 2; }
+
+/* Στοιχείο στο sidebar */
+.sidebar .item{
+  display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:14px; cursor:pointer;
+  border:1px solid var(--border-2); background:var(--panel-2); color:var(--text); transition:.18s;
+  box-sizing:border-box; width:100%;
+}
+.sidebar .item .label{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sidebar .item:hover{ transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,.35); border-color: var(--border); }
+
+/* Sidebar responsive */
+@media (max-width: 900px){
+  .with-sidebar .app{ grid-template-columns: 1fr; }
+  .with-sidebar .sidebar{ position: fixed; top:0; left:0; bottom:0; width:min(84vw,320px); z-index:60; }
+}
+@media print{ .sidebar{ display:none !important; } }
+
+/* Print view */
+@media print{
+  body{ background:white; }
+  .app{ height:auto; }
+  .composer{ display:none; }
+  .card{ box-shadow:none; border: 1px solid #e5e7eb; background:white; }
+  .me .bubble{ background:#000 !important; color:white !important; }
+  .me .bubble.is-error{ background:#000 !important; color:#fff !important; border:2px solid #ef4444 !important; }
+  .them .bubble{ background:transparent !important; color:#0b0f14; border:none !important; }
+}
+
+/* Στυλ για active κουμπιά */
+.icon.toggle[aria-pressed="true"],
+.btn.is-active,
+button.icon[aria-pressed="true"],
+.btn:active{
+  background: var(--active) !important;
+  border-color: var(--active) !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 3px rgba(58,130,247,.25);
+}
+.icon.toggle:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(58,162,255,.35), 0 6px 16px rgba(0,0,0,.25);
+}
+
+/* Sidebar dark mode */
+body:not(.light) .sidebar{
+  background: var(--panel); border: 1px solid var(--border);
+  box-shadow: var(--shadow); -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+body:not(.light) .sidebar .item{ background: var(--panel-2); border:1px solid var(--border-2); color:var(--text); border-radius:14px; }
+body:not(.light) .sidebar .item:hover{ border-color: rgba(255,255,255,.18); box-shadow: 0 8px 24px rgba(0,0,0,.35); transform: translateY(-1px); }
+
+/* Active state στο sidebar */
+.sidebar .item.is-active,
+.sidebar .item[aria-current="page"]{ background: var(--active); border-color: var(--active); color:#fff; }
+body:not(.light) .sidebar .item.is-active,
+body:not(.light) .sidebar .item[aria-current="page"]{
+  background: var(--active); border-color: var(--active); color: #fff;
+  box-shadow: 0 0 0 3px rgba(58,130,247,.25);
+}
+
+/* Scrollbar sidebar */
+.sidebar::-webkit-scrollbar{ width: 10px; }
+.sidebar::-webkit-scrollbar-track{ background: rgba(255,255,255,.04); border-radius: 16px; }
+.sidebar::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.18); border-radius: 16px; border: 3px solid transparent; background-clip: padding-box; }
+
+/* Context menu */
+.ctx-menu{
+  position: fixed; z-index: 1000; min-width: 180px;
+  background: var(--panel); color: var(--text);
+  border: 1px solid rgba(255,255,255,.12); border-radius: 12px; box-shadow: var(--shadow);
+  padding: 6px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.ctx-menu .ctx-menu-item{
+  display:block; width:100%; text-align:left; background: transparent; color: inherit;
+  border: none; cursor: pointer; padding: 8px 10px; border-radius: 8px; font-weight: 600;
+}
+.ctx-menu .ctx-menu-item:hover{ background: rgba(255,255,255,.06); }
+
+/* Backdrop για dialogs */
+.ui-backdrop{
+  position:fixed; inset:0; z-index:1000; background: rgba(0,0,0,.6);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  animation: uiFade .18s ease-out both;
+}
+.ui-dialog{
+  position:fixed; inset:0; z-index:1001;
+  display:grid; place-items:center; padding:24px;
+}
+.ui-panel{
+  width:min(480px, 92vw); background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding:16px;
+}
+.ui-title{ font:600 18px/1.3 system-ui; margin:4px 0 8px; }
+.ui-desc { color: var(--muted); margin:0 0 14px; }
+.ui-actions{ display:flex; gap:8px; justify-content:flex-end; }
+
+/* Κουμπιά dialogs */
+.ui-btn{ background: var(--panel-2); color: var(--text); border:1px solid var(--border); border-radius: 12px; padding:8px 12px; cursor:pointer; transition:.2s; }
+.ui-btn:hover{ transform: translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.25); }
+.ui-btn.primary{ background: var(--active); border-color: var(--active); color:#fff; }
+.ui-btn.danger { background: color-mix(in srgb, var(--danger) 92%, black); border-color: var(--danger); color:#fff; }
+.ui-btn.ghost  { background: transparent; }
+
+/* Εμφάνιση dialog */
+@keyframes uiFade{ from{opacity:0} to{opacity:1} }
+
+/* Navigation στα attachments */
+.att-nav {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border-2);
+  color: var(--text); cursor: pointer; font-size: 18px;
+}
+.att-nav:hover{ background: var(--panel); border-color: var(--border); }
+.att-nav:disabled { opacity: 0.3; cursor: default; }
+/* Περιοχή εισαγωγής (composer) */
+.composer-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;   
+}
+.composer-input textarea {
+  flex: 1; min-height: 30px; max-height: 160px;
+  resize: none; border: none; background: transparent;
+  color: var(--text, #e8f0f7); font-size: 16px; line-height: 1.4;
+  padding: 10px 12px; outline: none; overflow-y: hidden;
+}
+.composer-input textarea:focus{
+  border-color: var(--active);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--active) 30%, transparent);
+}
+
+/* Στυλ γραμματοσειράς για όλο το σώμα */
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Noto Sans, "Apple Color Emoji","Segoe UI Emoji", sans-serif;
+  transition: background .25s, color .25s;
+}
+
+/* Dark mode βασικό */
+body:not(.light) {
+  background: #000; color: #f3f4f6;
+}
+
+/* Στυλ file-chip σε dark mode */
+body:not(.light) .file-chip {
+  background: rgb(10, 10, 10); border: 1px solid #444;
+}
+body:not(.light) .file-chip.is-success {
+  border-color: #16a34a; box-shadow: 0 0 0 2px rgba(22, 163, 74, .2) inset;
+}
+body:not(.light) .file-chip.is-error {
+  border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, .2) inset;
+}
+
+/* Στρογγυλοποίηση πεδίου composer */
+body:not(.light) .composer-input {
+  background: rgb(10, 10, 10); border: 1px solid #444;
+}
+
+/* Κουμπί αποστολής dark mode */
+#sendBtn { border-radius: 8px; font-weight: 600; padding: 6px 10px; }
+body:not(.light) #sendBtn { background: #2563eb; color: #fff; }
+body:not(.light) #sendBtn.is-disabled,
+body:not(.light) #sendBtn:disabled { background: #374151; }
+
+/* Light theme βασικό */
+body.light { background: #f9fafb; color: #111; }
+
+/* File-chip σε light mode */
+body.light .file-chip { border: 1px solid #444; }
+body.light .file-chip.is-success {
+  border-color: #16a34a; box-shadow: 0 0 0 2px rgba(22, 163, 74, .2) inset;
+}
+body.light .file-chip.is-error { border-color: #ef4444; }
+
+/* Composer light mode */
+body.light .composer-input {
+  background: #fff; border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+/* Κουμπί αποστολής light mode */
+body.light #sendBtn { background: #3b82f6; color: #fff; }
+body.light #sendBtn.is-disabled,
+body.light #sendBtn:disabled { background: #93c5fd; }
+
+/* Stream padding */
+.chat.card .stream{ padding: 4px 8px; }
+
+/* Στοίχιση για τα μηνύματα του άλλου */
+.msg-row.them{ align-items: flex-start; }
+
+/* ==================== Drag and Drop Overlay ==================== */
+.drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.85);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  pointer-events: none;
+}
+
+.drag-overlay.visible {
+  opacity: 1;
+}
+
+.drag-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 64px;
+  background: linear-gradient(135deg, rgba(56, 130, 247, 0.15), rgba(159, 122, 234, 0.15));
+  border: 3px dashed var(--active);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  animation: dragPulse 2s ease-in-out infinite;
+}
+
+.drag-icon {
+  font-size: 72px;
+  animation: dragBounce 1s ease-in-out infinite;
+}
+
+.drag-text {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.drag-subtext {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  max-width: 400px;
+}
+
+/* Animations για drag overlay */
+@keyframes dragPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 20px 60px rgba(56, 130, 247, 0.3), 0 0 40px rgba(56, 130, 247, 0.2);
+  }
+}
+
+@keyframes dragBounce {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Light mode για drag overlay */
+body.light .drag-overlay {
+  background: rgba(255, 255, 255, 0.92);
+  
+}
+
+body.light .drag-content {
+  background: linear-gradient(135deg, rgba(56, 130, 247, 0.12), rgba(159, 122, 234, 0.12));
+  border-color: var(--accent);
+}
+
+body.light .drag-text {
+  color: #111;
+}
+
+body.light .drag-subtext {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+/* Reduced motion για accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .drag-content {
+    animation: none;
+  }
+  .drag-icon {
+    animation: none;
+  }
+  .drag-overlay {
+    transition: none;
+  }
+}
+
+/* ==================== Index Panel ==================== */
+.index-panel{
+  display:none; 
+  padding:16px; 
+  background:var(--panel);
+  border:1px solid var(--border); 
+  border-radius:20px; 
+  box-shadow: var(--shadow);
+  overflow:hidden;
+  flex-direction: column;
+}
+.with-index-panel .index-panel{ display:flex; }
+.with-index-panel header.card{ grid-column: 1 / -1; }
+.with-index-panel .chat.card{ grid-row: 2; grid-column: 1 / 2; }
+.with-index-panel .composer.card{ grid-row: 3; grid-column: 1 / 2; }
+.with-index-panel .app{ 
+  grid-template-columns: 1fr 320px; 
+  grid-template-rows: auto 1fr auto;
+}
+
+/* Index Panel Header */
+.index-header{
+  display:flex; 
+  align-items:center; 
+  justify-content:space-between; 
+  margin-bottom:12px;
+  padding-bottom:12px;
+  border-bottom:1px solid var(--border-2);
+}
+.index-header h3{
+  margin:0; 
+  font-size:16px; 
+  font-weight:600; 
+  color:var(--text);
+}
+.index-header .icon-btn{
+  appearance:none; 
+  border:none;
+  background:transparent; 
+  color:var(--muted);
+  font-size:28px; 
+  line-height:1;
+  cursor:pointer; 
+  transition:.2s;
+  padding:0 4px;
+}
+.index-header .icon-btn:hover{
+  color:var(--text);
+  transform: scale(1.1);
+}
+
+/* Index Content */
+.index-content{
+  flex:1; 
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.index-empty{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:40px 20px;
+  text-align:center;
+  color:var(--muted);
+  font-size:14px;
+}
+
+/* Document Card στο Index */
+.doc-card{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:12px;
+  border-radius:12px;
+  border:1px solid var(--border-2);
+  background:var(--panel-2);
+  transition:.2s;
+}
+.doc-card:hover{
+  border-color:var(--border);
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
+  transform: translateY(-1px);
+}
+.doc-card-header{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+}
+.doc-card-info{
+  flex:1;
+  min-width:0;
+}
+.doc-card-name{
+  font-size:14px;
+  font-weight:600;
+  color:var(--text);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  margin:0 0 4px 0;
+}
+.doc-card-meta{
+  font-size:12px;
+  color:var(--muted);
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.doc-card-meta span{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+}
+.doc-card-actions{
+  display:flex;
+  gap:6px;
+  margin-top:4px;
+}
+.doc-card-btn{
+  appearance:none;
+  border:1px solid var(--border-2);
+  background:transparent;
+  color:var(--muted);
+  border-radius:8px;
+  padding:6px 10px;
+  font-size:12px;
+  cursor:pointer;
+  transition:.2s;
+}
+.doc-card-btn:hover{
+  border-color:var(--border);
+  color:var(--text);
+  background:rgba(255,255,255,.05);
+}
+.doc-card-btn.danger:hover{
+  border-color:var(--danger);
+  color:var(--danger);
+  background:rgba(239,68,68,.1);
+}
+
+/* Scrollbar για index panel */
+.index-content::-webkit-scrollbar{ width: 8px; }
+.index-content::-webkit-scrollbar-track{ background: rgba(255,255,255,.04); border-radius: 16px; }
+.index-content::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.18); border-radius: 16px; border: 2px solid transparent; background-clip: padding-box; }
+
+/* Responsive για Index Panel */
+@media (max-width: 1000px){
+  .with-index-panel .app{ grid-template-columns: 1fr; }
+  .with-index-panel .index-panel{ 
+    position: fixed; 
+    top:0; 
+    right:0; 
+    bottom:0; 
+    width:min(90vw,340px); 
+    z-index:60;
+    border-radius:0;
+  }
+}
+@media print{ .index-panel{ display:none !important; } }
