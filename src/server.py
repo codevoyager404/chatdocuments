@@ -479,10 +479,34 @@ async def query_pdf(
 
         contexts = [(c.source, c.page, c.text) for _, c in results]
         
+        # Δημιουργία λίστας πηγών για εμφάνιση με scores
+        sources = []
+        seen = {}  # Αλλάζουμε σε dict για να κρατάμε το max score ανά πηγή
+        
+        for (score, chunk) in results:
+            key = (chunk.source, chunk.page)
+            # Κρατάμε το υψηλότερο score αν υπάρχουν πολλαπλά chunks από την ίδια πηγή/σελίδα
+            if key not in seen or score > seen[key]:
+                seen[key] = score
+        
+        # Δημιουργία της τελικής λίστας πηγών με scores
+        for (source, page), score in seen.items():
+            sources.append({
+                "filename": source, 
+                "page": page,
+                "score": float(score)
+            })
+        
+        # Ταξινόμηση πηγών με βάση το score (από υψηλότερο σε χαμηλότερο)
+        sources.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Κρατάμε μόνο τις top 2 πιο σχετικές πηγές για διασταύρωση
+        sources = sources[:2]
+        
         # Επιστροφή μόνο των αποσπασμάτων εάν δεν ζητηθεί χρήση AI
         if use_llm != "1":
             snippet = "\n\n".join([text for _, _, text in contexts])
-            return {"ok": True, "answer": snippet, "session_id": session_id}
+            return {"ok": True, "answer": snippet, "sources": sources, "session_id": session_id}
 
         # Σύνθεση απάντησης με τη χρήση του μοντέλου γλώσσας
         messages = build_rag_prompt(question, contexts, extractive=(llm_extractive == "1"))
@@ -496,7 +520,7 @@ async def query_pdf(
         
         _log_add(f"Σύγκριση tokens: Python={python_tokens}, API={api_prompt_tokens}, διαφορά={difference} ({percentage_diff:.2f}%)")
         
-        return {"ok": True, "answer": answer, "session_id": session_id}
+        return {"ok": True, "answer": answer, "sources": sources, "session_id": session_id}
 
     except requests.exceptions.HTTPError as e:
         status = getattr(getattr(e, "response", None), "status_code", 502) or 502
