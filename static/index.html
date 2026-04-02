@@ -1,94 +1,83 @@
 <!doctype html>
-<html lang="el">
+<html lang="en">
 <head>
-  <!-- Βασικά meta tags -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Απενεργοποίηση cache για development -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Συνομιλία με τα Έγγραφά σας</title>
+  <title>Chat With Your Documents</title>
   <link rel="stylesheet" href="/static/css/chat.css" id="css-link" />
 </head>
 <body>
   <div class="app" id="app">
-    <!-- Κεφαλίδα με controls -->
-    <header class="card" aria-label="Κεφαλίδα συνομιλίας">
+    <header class="card" aria-label="Chat header">
       <div class="title">
         <span class="logo-panel">
-          <img src="/static/img/uop1_logo.png" class="badge-logo" alt="Λογότυπο Πανεπιστημίου" onerror="this.hidden=true" />
+          <img src="/static/img/uop1_logo.png" class="badge-logo" alt="Project logo" onerror="this.hidden=true" />
         </span>
         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
       </div>
       <div class="actions">
-        <!-- Toggle για απενεργοποίηση LLM -->
         <input type="checkbox" id="disableLLM" hidden />
-        <button class="icon toggle" id="disableLLMBtn" aria-pressed="false" title="Απαντήσεις μόνο από αποσπάσματα (χωρίς AI)">Χωρίς AI</button>
-        <!-- Toggle για extractive mode -->
+        <button class="icon toggle" id="disableLLMBtn" aria-pressed="false" title="Answers from retrieved excerpts only">No AI</button>
         <input type="checkbox" id="llmExtractive" hidden />
-        <button class="icon toggle" id="llmExtractiveBtn" aria-pressed="false" title="Απαντήσεις με extractive AI">Λειτουργία Extractive</button>
-        <button class="icon toggle" id="sidebarBtn" aria-pressed="false">Ιστορικό</button>
-        <button class="icon toggle" id="indexPanelBtn" aria-pressed="false">Έγγραφα</button>
-        <button class="icon" id="themeBtn" aria-label="Εναλλαγή θέματος" title="Σκούρο / Φωτεινό">Θέμα</button>
-        <button class="icon" id="newChatBtnHeader" aria-label="Νέα συνομιλία" title="Ξεκινήστε νέα συνομιλία">Νέα Συνομιλία</button>
+        <button class="icon toggle" id="llmExtractiveBtn" aria-pressed="false" title="Extractive answer mode">Extractive Mode</button>
+        <button class="icon toggle" id="sidebarBtn" aria-pressed="false">History</button>
+        <button class="icon toggle" id="indexPanelBtn" aria-pressed="false">Documents</button>
+        <button class="icon" id="themeBtn" aria-label="Toggle theme" title="Dark / Light">Theme</button>
+        <button class="icon" id="newChatBtnHeader" aria-label="Start a new chat" title="Start a new chat">New Chat</button>
       </div>
     </header>
 
-    <!-- Sidebar για ιστορικό συνομιλιών -->
-    <aside class="sidebar" id="sidebar" aria-label="Ιστορικό συνομιλιών">
+    <aside class="sidebar" id="sidebar" aria-label="Chat history">
       <div id="historyList"></div>
     </aside>
 
-    <!-- Index Panel για ανεβασμένα έγγραφα -->
-    <aside class="index-panel" id="indexPanel" aria-label="Ανεβασμένα έγγραφα">
+    <aside class="index-panel" id="indexPanel" aria-label="Uploaded documents">
       <div class="index-header">
-        <h3>Έγγραφα στη Συνεδρία</h3>
-        <button class="icon-btn" id="closeIndexPanel" aria-label="Κλείσιμο" title="Κλείσιμο">×</button>
+        <h3>Documents in This Session</h3>
+        <button class="icon-btn" id="closeIndexPanel" aria-label="Close" title="Close">×</button>
       </div>
       <div class="index-content" id="indexContent">
         <div class="index-empty">
-          <p>Δεν έχουν ανέβει έγγραφα ακόμα</p>
+          <p>No documents uploaded yet</p>
         </div>
       </div>
     </aside>
 
-    <!-- Κύρια περιοχή συνομιλίας -->
-    <main class="chat card" id="chat" aria-live="polite" aria-label="Ροή μηνυμάτων">
+    <main class="chat card" id="chat" aria-live="polite" aria-label="Message stream">
       <div class="stream" id="stream">
-        <!-- Indicator για typing animation -->
         <div class="msg-row them hidden" id="typingRow">
           <div class="bubble"><span class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
         </div>
       </div>
     </main>
 
-    <!-- Footer με input και file upload -->
-    <footer class="composer card" aria-label="Περιοχή σύνθεσης μηνύματος">
-      <!-- Slider για attachments -->
+    <footer class="composer card" aria-label="Message composer">
       <div class="attachments-slider" id="attachmentsWrap" hidden>
-        <button class="att-nav" id="attPrev" aria-label="Προηγούμενο" title="Προβολή προηγούμενου αρχείου">‹</button>
+        <button class="att-nav" id="attPrev" aria-label="Previous" title="Show previous file">‹</button>
         <div class="att-track" id="attachmentsTrack"></div>
-        <button class="att-nav" id="attNext" aria-label="Επόμενο" title="Προβολή επόμενου αρχείου">›</button>
+        <button class="att-nav" id="attNext" aria-label="Next" title="Show next file">›</button>
       </div>
       <div class="composer-inner">
         <div class="composer-input">
-          <button class="icon" id="attachBtn" title="Επισύναψη εγγράφων" aria-label="Επισύναψη εγγράφων">📎</button>
+          <button class="icon" id="attachBtn" title="Attach documents" aria-label="Attach documents">📎</button>
           <input type="file" id="fileInput" accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" multiple hidden />
-          <textarea id="input" rows="1" placeholder="Γράψτε την ερώτησή σας..." aria-label="Πεδίο κειμένου"></textarea>
-          <button class="icon" id="sendBtn" title="Αποστολή μηνύματος" aria-label="Αποστολή μηνύματος" disabled>➤</button>
+          <textarea id="input" rows="1" placeholder="Ask a question about your documents..." aria-label="Message input"></textarea>
+          <button class="icon" id="sendBtn" title="Send message" aria-label="Send message" disabled>➤</button>
         </div>
       </div>
     </footer>
   </div>
 
-  <!-- Context menu για δεξί κλικ -->
   <div id="ctxMenu" class="ctx-menu" role="menu" hidden>
-    <button class="ctx-menu-item" data-action="rename" role="menuitem">Μετονομασία</button>
-    <button class="ctx-menu-item" data-action="copy" role="menuitem">Αντιγραφή Ερώτησης/Απάντησης</button>
-    <button class="ctx-menu-item" data-action="delete" role="menuitem">Διαγραφή Συνομιλίας</button>
+    <button class="ctx-menu-item" data-action="rename" role="menuitem">Rename</button>
+    <button class="ctx-menu-item" data-action="copy" role="menuitem">Copy Q&A</button>
+    <button class="ctx-menu-item" data-action="delete" role="menuitem">Delete Chat</button>
   </div>
 
+  <script src="/config.js"></script>
   <script src="/static/js/chat.js" id="js-script"></script>
 </body>
 </html>

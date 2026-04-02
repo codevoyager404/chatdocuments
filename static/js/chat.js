@@ -1,4 +1,3 @@
-// Μήνυμα "Ανέβασμα εγγράφου..." με animation
 const stream = document.getElementById('stream');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
@@ -25,19 +24,42 @@ let ctxTarget = null;
 let isBusy = false;
 let pendingControllers = [];
 let indexingIndicatorRow = null;
+const APP_CONFIG = window.__APP_CONFIG__ || {};
+const API_BASE_URL = String(APP_CONFIG.API_BASE_URL || '').replace(/\/+$/, '');
+const SESSION_KEY_STORAGE = 'chat_session_key';
+function apiUrl(path) {
+  if (!path) return API_BASE_URL || '';
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
+function ensureBrowserSessionKey() {
+  let key = '';
+  try {
+    key = localStorage.getItem(SESSION_KEY_STORAGE) || '';
+    if (!key) {
+      key = 'sk_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      localStorage.setItem(SESSION_KEY_STORAGE, key);
+    }
+  } catch {
+    key = 'sk_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+  }
+  return key;
+}
+function authHeaders() {
+  return { 'X-Session-Key': ensureBrowserSessionKey() };
+}
 function setBusy(next) {
   isBusy = !!next;
   if (sendBtn) {
-    sendBtn.classList.toggle('busy', isBusy);
+      sendBtn.classList.toggle('busy', isBusy);
     if (isBusy) {
       sendBtn.textContent = '⏸';
-      sendBtn.setAttribute('aria-label', 'Παύση');
-      sendBtn.title = 'Παύση';
+      sendBtn.setAttribute('aria-label', 'Stop');
+      sendBtn.title = 'Stop';
       sendBtn.disabled = false;
     } else {
       sendBtn.textContent = '➤';
-      sendBtn.setAttribute('aria-label', 'Αποστολή');
-      sendBtn.title = 'Αποστολή';
+      sendBtn.setAttribute('aria-label', 'Send');
+      sendBtn.title = 'Send';
     }
   }
   updateSendAvailability();
@@ -150,15 +172,14 @@ function addThem(text, meta, isError, sources) {
     }
   });
 
-  // Προσθήκη sources αν υπάρχουν
   if (sources && Array.isArray(sources) && sources.length > 0) {
     const sourcesSection = document.createElement('div');
     sourcesSection.className = 'sources-section';
 
     const sourcesTitle = document.createElement('div');
     sourcesTitle.className = 'sources-title';
-    sourcesTitle.textContent = 'Πηγές:';
-    sourcesTitle.title = 'Οι πιο σχετικές πηγές που χρησιμοποιήθηκαν για την απάντηση';
+    sourcesTitle.textContent = 'Sources:';
+    sourcesTitle.title = 'Most relevant supporting sources used for this answer';
     sourcesSection.appendChild(sourcesTitle);
 
     const sourcesList = document.createElement('div');
@@ -171,7 +192,6 @@ function addThem(text, meta, isError, sources) {
 
       const icon = document.createElement('span');
       icon.className = 'source-icon';
-      // Διαφορετικό icon ανάλογα με τον τύπο αρχείου
       if (source.filename.toLowerCase().endsWith('.pdf')) {
         icon.textContent = '📄';
       } else if (source.filename.toLowerCase().endsWith('.pptx')) {
@@ -183,14 +203,13 @@ function addThem(text, meta, isError, sources) {
 
       const filename = document.createElement('span');
       filename.className = 'source-filename';
-      // Αφαιρούμε την κατάληξη για πιο καθαρή εμφάνιση
       const nameWithoutExt = source.filename.replace(/\.(pdf|pptx)$/i, '');
       filename.textContent = nameWithoutExt;
       tag.appendChild(filename);
 
       const page = document.createElement('span');
       page.className = 'source-page';
-      page.textContent = ` • σελ. ${source.page}`;
+      page.textContent = ` • p. ${source.page}`;
       tag.appendChild(page);
 
       sourcesList.appendChild(tag);
@@ -321,7 +340,7 @@ async function send() {
   // Αποστολή ερώτησης στο backend
   try {
     const fd = new FormData();
-    fd.append('question', text || 'Ερώτηση για τα ανεβασμένα έγγραφα');
+    fd.append('question', text || 'Question about the uploaded documents');
     const kValue = (kInput && kInput.value) ? parseInt(kInput.value, 10) : 15;
     fd.append('k', String(Math.max(1, Math.min(50, kValue || 15))));  // k μεταξύ 1-50
     fd.append('use_llm', (disableLLM && disableLLM.checked) ? '0' : '1');
@@ -329,7 +348,7 @@ async function send() {
     fd.append('session_id', getCurrentSessionId());
     const ctrlQ = new AbortController();
     addController(ctrlQ);
-    const res = await fetch('/query', { method: 'POST', body: fd, signal: ctrlQ.signal });
+    const res = await fetch(apiUrl('/query'), { method: 'POST', body: fd, headers: authHeaders(), signal: ctrlQ.signal });
     const data = await res.json();
     const tr2 = getTypingRow();
     if (tr2) { tr2.classList.add('hidden'); }
@@ -338,7 +357,7 @@ async function send() {
         const fullMessage = `${data.error}\n\n${data.message}\n\n${data.suggestion}`;
         if (userRow) markQuestionError(userRow, fullMessage, true);
       } else {
-        if (userRow) markQuestionError(userRow, data.error || 'Σφάλμα', true);
+        if (userRow) markQuestionError(userRow, data.error || 'Error', true);
       }
       setBusy(false);
       return;
@@ -421,8 +440,8 @@ dragOverlay.className = 'drag-overlay';
 dragOverlay.innerHTML = `
   <div class="drag-content">
     <div class="drag-icon">📁</div>
-    <div class="drag-text">Αφήστε τα αρχεία εδώ</div>
-    <div class="drag-subtext">Υποστηρίζονται PDF και PowerPoint αρχεία</div>
+    <div class="drag-text">Drop files here</div>
+    <div class="drag-subtext">PDF and PowerPoint files are supported</div>
   </div>
 `;
 dragOverlay.style.display = 'none';
@@ -527,8 +546,8 @@ document.addEventListener('drop', (e) => {
 
   if (files.length === 0) {
     showError({
-      title: 'Μη έγκυρα αρχεία',
-      desc: 'Παρακαλώ σύρετε μόνο PDF ή PowerPoint αρχεία (.pdf, .pptx)'
+      title: 'Invalid files',
+      desc: 'Please drop PDF or PowerPoint files only (.pdf, .pptx)'
     });
     return;
   }
@@ -539,7 +558,7 @@ document.addEventListener('drop', (e) => {
 
   // Εμφάνιση toast notification (προαιρετικά)
   const plural = files.length > 1;
-  console.log(`Προστέθηκαν ${files.length} αρχεί${plural ? 'α' : 'ο'}`);
+      console.log(`Added ${files.length} file${plural ? 's' : ''}`);
 });
 
 // Αποτρέπει το default behavior του browser (άνοιγμα αρχείου)
@@ -563,15 +582,15 @@ function addAttachmentChip(file) {
     <div class="icon" aria-hidden="true">${kindIcon(kind)}</div>
     <div class="meta">
       <div class="name">${escapeHtml(file.name)}</div>
-      <div class="sub">Σε αναμονή</div>
+      <div class="sub">Pending</div>
     </div>
     <div class="progress" aria-hidden="true" hidden><div class="fill" style="width:0%"></div></div>
     <div class="actions" style="display:flex; gap:4px; align-items:center; margin-left:4px;">
-      <button class="cancel" aria-label="Διακοπή" hidden>⏹</button>
-      <button class="retry" aria-label="Επανάληψη" hidden>↻</button>
-      <button class="info" aria-label="Πληροφορίες" hidden>ℹ</button>
+      <button class="cancel" aria-label="Cancel" hidden>⏹</button>
+      <button class="retry" aria-label="Retry" hidden>↻</button>
+      <button class="info" aria-label="Details" hidden>ℹ</button>
     </div>
-    <button class="close" aria-label="Αφαίρεση">×</button>
+    <button class="close" aria-label="Remove">×</button>
   `;
   const entry = { file, el: chip, status: 'pending', errorMessage: '' };
   attachments.push(entry);
@@ -589,7 +608,7 @@ function addAttachmentChip(file) {
         const fd = new FormData();
         fd.append('filename', entry.file.name);
         fd.append('session_id', getCurrentSessionId());
-        fetch('/index/remove', { method: 'POST', body: fd });
+        fetch(apiUrl('/index/remove'), { method: 'POST', body: fd, headers: authHeaders() });
       } catch { }
     }
   });
@@ -617,8 +636,8 @@ function addAttachmentChip(file) {
     infoBtn.addEventListener('click', () => {
       if (!entry.errorMessage) { return; }
       showError({
-        title: 'Λεπτομέρειες σφάλματος',
-        desc: escapeHtml(entry.errorMessage || 'Άγνωστο σφάλμα')
+        title: 'Error details',
+        desc: escapeHtml(entry.errorMessage || 'Unknown error')
       });
     });
   }
@@ -660,11 +679,11 @@ function updateChipStatus(entry, status, errorMsg) {
   // Ενημέρωση κειμένου κατάστασης
   const sub = chip.querySelector('.sub');
   if (sub) {
-    if (status === 'pending') sub.textContent = 'Σε αναμονή';
-    else if (status === 'uploading') sub.textContent = 'Μεταφόρτωση…';
-    else if (status === 'success') sub.textContent = 'Ολοκληρώθηκε';
-    else if (status === 'canceled') sub.textContent = 'Ακυρώθηκε';
-    else sub.textContent = 'Απέτυχε';
+    if (status === 'pending') sub.textContent = 'Pending';
+    else if (status === 'uploading') sub.textContent = 'Uploading...';
+    else if (status === 'success') sub.textContent = 'Completed';
+    else if (status === 'canceled') sub.textContent = 'Canceled';
+    else sub.textContent = 'Failed';
   }
   // Εμφάνιση/απόκρυψη κουμπιών (retry, info, cancel)
   const retryBtn = chip.querySelector('.retry');
@@ -703,8 +722,10 @@ async function uploadAttachment(entry) {
     addController({ abort: aborter });
     entry._aborter = aborter;
     // Ρύθμιση request
-    xhr.open('POST', '/index/batch');
+    xhr.open('POST', apiUrl('/index/batch'));
     xhr.responseType = 'json';
+    const headers = authHeaders();
+    Object.keys(headers).forEach((key) => xhr.setRequestHeader(key, headers[key]));
     // Φτιάχνουμε form με το αρχείο
     const formData = new FormData();
     formData.append('file', entry.file);
@@ -718,7 +739,7 @@ async function uploadAttachment(entry) {
     };
     // Διαχείριση σφαλμάτων
     xhr.onerror = () => {
-      updateChipStatus(entry, 'error', 'Σφάλμα δικτύου');
+      updateChipStatus(entry, 'error', 'Network error');
       resolve(false);
     };
     xhr.onabort = () => {
@@ -848,7 +869,7 @@ function genId() {
 async function getSessions() {
   // Προσπαθεί να φορτώσει από το backend
   try {
-    const response = await fetch('/chat/history/list');
+    const response = await fetch(apiUrl('/chat/history/list'), { headers: authHeaders() });
     if (response.ok) {
       const data = await response.json();
       if (data.ok && data.sessions && data.sessions.length > 0) {
@@ -888,7 +909,7 @@ async function getSessionMessages(sessionId) {
 
   // Προσπαθεί να φορτώσει από το backend
   try {
-    const response = await fetch(`/chat/history/load?session_id=${encodeURIComponent(sessionId)}`);
+    const response = await fetch(apiUrl(`/chat/history/load?session_id=${encodeURIComponent(sessionId)}`), { headers: authHeaders() });
     if (response.ok) {
       const data = await response.json();
       if (data.ok && data.messages) {
@@ -926,13 +947,14 @@ async function setSessionMessages(sessionId, msgs) {
     formData.append('session_id', sessionId);
     formData.append('messages', JSON.stringify(msgs));
     if (session) {
-      formData.append('title', session.title || 'Νέα συνομιλία');
+      formData.append('title', session.title || 'New Chat');
       formData.append('timestamp', session.ts || Date.now());
     }
 
-    await fetch('/chat/history/save', {
+    await fetch(apiUrl('/chat/history/save'), {
       method: 'POST',
-      body: formData
+      body: formData,
+      headers: authHeaders()
     });
   } catch (err) {
     console.warn('Failed to save chat history to backend:', err);
@@ -963,10 +985,10 @@ function setSessionMessagesSync(sessionId, msgs) {
       formData.append('session_id', sessionId);
       formData.append('messages', JSON.stringify(msgs));
       if (session) {
-        formData.append('title', session.title || 'Νέα συνομιλία');
+        formData.append('title', session.title || 'New Chat');
         formData.append('timestamp', session.ts || Date.now());
       }
-      await fetch('/chat/history/save', { method: 'POST', body: formData });
+      await fetch(apiUrl('/chat/history/save'), { method: 'POST', body: formData, headers: authHeaders() });
     } catch (err) { }
   })();
 }
@@ -1036,7 +1058,7 @@ function ensureCurrentSession() {
 }
 // Δημιουργεί νέα συνεδρία και την κάνει ενεργή
 function createNewSession() {
-  const session = { id: genId(), title: 'Νέα συνομιλία', ts: Date.now() };
+  const session = { id: genId(), title: 'New Chat', ts: Date.now() };
   const sessions = getSessionsSync();
   sessions.unshift(session); // μπαίνει πρώτη στη λίστα
   setSessions(sessions);
@@ -1048,7 +1070,7 @@ function createNewSession() {
 }
 // Δημιουργεί έξυπνο τίτλο από το κείμενο του χρήστη
 function generateSmartTitle(text, maxLength = 50) {
-  if (!text) return 'Νέα συνομιλία';
+  if (!text) return 'New Chat';
 
   // Καθαρίζει το κείμενο
   let cleaned = String(text).trim();
@@ -1079,7 +1101,7 @@ function generateSmartTitle(text, maxLength = 50) {
     }
   }
 
-  return cleaned.trim() || 'Νέα συνομιλία';
+  return cleaned.trim() || 'New Chat';
 }
 
 // Μετονομάζει τη συνεδρία αν είναι ακόμη "Νέα συνομιλία"
@@ -1088,7 +1110,7 @@ function renameSessionIfNeeded(sessionId, firstUserText) {
   const sessions = getSessionsSync();
   const s = sessions.find(x => x.id === sessionId);
   if (!s) return;
-  if (s.title === 'Νέα συνομιλία') {
+  if (s.title === 'New Chat') {
     s.title = generateSmartTitle(firstUserText, 50);
     setSessions(sessions);
     renderHistory();
@@ -1106,7 +1128,7 @@ function renderHistory() {
     btn.className = 'item' + (isActive ? ' is-active' : '');
     btn.dataset.id = s.id;
     if (isActive) btn.setAttribute('aria-current', 'page');
-    btn.innerHTML = `<span class="label">${escapeHtml(s.title || 'Συνομιλία')}</span>`;
+    btn.innerHTML = `<span class="label">${escapeHtml(s.title || 'Chat')}</span>`;
     btn.addEventListener('click', () => {
       setCurrentSessionId(s.id);
       renderHistory();
@@ -1131,7 +1153,7 @@ async function renderSessionMessages(sessionId) {
     if (m.role === 'user') {
       const userRow = addMe(m.text);
       if (m.noDocsWarning) {
-        markQuestionError(userRow, 'Δεν έχουν ανέβει ακόμα έγγραφα. Ανεβάστε ένα PDF ή PowerPoint.', true);
+        markQuestionError(userRow, 'No documents uploaded yet. Upload a PDF or PowerPoint file first.', true);
       }
     } else {
       addThem(m.text, m.meta, false, m.sources);
@@ -1162,7 +1184,7 @@ function clearChatView() {
   typing.innerHTML = `
           <div>
             <div class="bubble"><span class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
-            <div class="meta">πληκτρολογεί…</div>
+            <div class="meta">typing...</div>
           </div>`;
   stream.appendChild(typing);
 }
@@ -1239,7 +1261,7 @@ if (ctxMenu) {
       const sid = ctxTarget.type === 'session' ? ctxTarget.id : currentId;
       const sessions = getSessionsSync();
       const s = sessions.find(x => x.id === sid);
-      const next = prompt('Νέος τίτλος:', s ? (s.title || '') : '');
+      const next = prompt('New title:', s ? (s.title || '') : '');
       if (next && s) { s.title = next.slice(0, 64); setSessions(sessions); renderHistory(); }
       hideCtx();
     } else if (action === 'copy') {
@@ -1251,11 +1273,11 @@ if (ctxMenu) {
       if (!sid) return hideCtx();
       hideCtx();
       const ok = await showConfirm({
-        title: 'Διαγραφή συνομιλίας',
-        desc: 'Είσαι σίγουρος ότι θέλεις να διαγράψεις αυτή τη συνομιλία; Η ενέργεια δεν αναιρείται.',
-        okText: 'Διαγραφή',
+        title: 'Delete chat',
+        desc: 'Are you sure you want to delete this chat? This action cannot be undone.',
+        okText: 'Delete',
         okVariant: 'danger',
-        cancelText: 'Άκυρο'
+        cancelText: 'Cancel'
       });
       if (ok) { deleteSession(sid); }
     }
@@ -1291,7 +1313,7 @@ async function deleteSession(sessionId) {
   try {
     const fd = new FormData();
     fd.append('session_id', sessionId);
-    const response = await fetch('/sessions/remove', { method: 'POST', body: fd });
+    const response = await fetch(apiUrl('/sessions/remove'), { method: 'POST', body: fd, headers: authHeaders() });
     if (response.ok) {
       const data = await response.json();
       console.log('Session deleted:', data);
@@ -1314,7 +1336,7 @@ async function deleteSession(sessionId) {
 }
 // Διάλογος για σφάλματα (μόνο κουμπί Κλείσιμο, χωρίς OK)
 function showError(opts) {
-  const o = Object.assign({ title: 'Λεπτομέρειες σφάλματος', desc: '' }, opts || {});
+  const o = Object.assign({ title: 'Error details', desc: '' }, opts || {});
   const wrap = document.createElement('div');
   wrap.innerHTML = `
     <div class="ui-backdrop"></div>
@@ -1323,7 +1345,7 @@ function showError(opts) {
         <div class="ui-title" id="uiTitle">${escapeHtml(o.title)}</div>
         ${o.desc ? `<div class="ui-desc">${escapeHtml(o.desc)}</div>` : ''}
         <div class="ui-actions">
-          <button class="ui-btn primary" data-x="0">Κλείσιμο</button>
+          <button class="ui-btn primary" data-x="0">Close</button>
         </div>
       </div>
     </div>`;
@@ -1340,7 +1362,7 @@ function showError(opts) {
 // Διάλογος επιβεβαίωσης (modal)
 function showConfirm(opts) {
   return new Promise(resolve => {
-    const o = Object.assign({ title: 'Επιβεβαίωση', desc: '', okText: 'OK', cancelText: 'Άκυρο', okVariant: 'primary' }, opts || {});
+    const o = Object.assign({ title: 'Confirm', desc: '', okText: 'OK', cancelText: 'Cancel', okVariant: 'primary' }, opts || {});
     const wrap = document.createElement('div');
     wrap.innerHTML = `
       <div class="ui-backdrop"></div>
@@ -1401,30 +1423,30 @@ if (closeIndexPanel) {
 async function loadIndexPanelData() {
   const sessionId = getCurrentSessionId();
   if (!sessionId) {
-    indexContent.innerHTML = '<div class="index-empty"><p>Δεν υπάρχει ενεργή συνεδρία</p></div>';
+    indexContent.innerHTML = '<div class="index-empty"><p>No active session</p></div>';
     return;
   }
 
   try {
-    const resp = await fetch(`/sessions/${sessionId}/stats`);
+    const resp = await fetch(apiUrl(`/sessions/${encodeURIComponent(sessionId)}/stats`), { headers: authHeaders() });
     const data = await resp.json();
 
     if (!data || !data.ok) {
-      indexContent.innerHTML = '<div class="index-empty"><p>Αδυναμία φόρτωσης δεδομένων</p></div>';
+      indexContent.innerHTML = '<div class="index-empty"><p>Could not load data</p></div>';
       return;
     }
 
     const docs = data.documents || [];
 
     if (docs.length === 0) {
-      indexContent.innerHTML = '<div class="index-empty"><p>Δεν έχουν ανέβει έγγραφα ακόμα</p></div>';
+      indexContent.innerHTML = '<div class="index-empty"><p>No documents uploaded yet</p></div>';
       return;
     }
 
     // Render document cards
     let html = '';
     for (const doc of docs) {
-      const tokensFormatted = (doc.tokens || 0).toLocaleString('el-GR');
+      const tokensFormatted = (doc.tokens || 0).toLocaleString('en-US');
 
       html += `
         <div class="doc-card" data-filename="${escapeHtml(doc.name)}">
@@ -1433,14 +1455,14 @@ async function loadIndexPanelData() {
               <p class="doc-card-name" title="${escapeHtml(doc.name)}">${escapeHtml(doc.name)}</p>
               <div class="doc-card-meta">
                 <span>${doc.chunks || 0} chunks</span>
-                <span>${doc.pages || 0} σελίδες</span>
+                <span>${doc.pages || 0} pages</span>
                 <span>${tokensFormatted} tokens</span>
               </div>
             </div>
           </div>
           <div class="doc-card-actions">
             <button class="doc-card-btn danger" data-action="delete" data-filename="${escapeHtml(doc.name)}">
-              Διαγραφή
+              Delete
             </button>
           </div>
         </div>
@@ -1448,23 +1470,23 @@ async function loadIndexPanelData() {
     }
 
     // Summary footer
-    const totalTokens = (data.total_tokens || 0).toLocaleString('el-GR');
+    const totalTokens = (data.total_tokens || 0).toLocaleString('en-US');
     const totalChunks = data.total_chunks || 0;
-    const remainingBudget = (data.remaining_budget || 0).toLocaleString('el-GR');
+    const remainingBudget = (data.remaining_budget || 0).toLocaleString('en-US');
     const usagePercent = data.usage_percentage ? data.usage_percentage.toFixed(1) : '0.0';
 
     html += `
       <div class="doc-card" style="background:rgba(86,182,255,.1); border-color:var(--accent);">
         <div class="doc-card-info">
-          <p class="doc-card-name">Σύνολο Συνεδρίας</p>
+          <p class="doc-card-name">Session Total</p>
           <div class="doc-card-meta">
-            <span>${docs.length} έγγραφα</span>
+            <span>${docs.length} documents</span>
             <span>${totalChunks} chunks</span>
             <span>${totalTokens} tokens</span>
           </div>
           <div class="doc-card-meta" style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border-2);">
-            <span>Διαθέσιμα: ${remainingBudget} tokens</span>
-            <span>Χρήση: ${usagePercent}%</span>
+            <span>Available: ${remainingBudget} tokens</span>
+            <span>Usage: ${usagePercent}%</span>
           </div>
         </div>
       </div>
@@ -1481,26 +1503,27 @@ async function loadIndexPanelData() {
         if (!filename) return;
 
         const confirmed = await showConfirm({
-          title: `Διαγραφή "${filename}"`,
-          desc: 'Το έγγραφο και τα chunks του θα διαγραφούν από τη συνεδρία. Αυτή η ενέργεια δεν μπορεί να αναιρεθεί.',
-          okText: 'Διαγραφή',
-          cancelText: 'Άκυρο'
+          title: `Delete "${filename}"`,
+          desc: 'This document and its chunks will be removed from the session. This action cannot be undone.',
+          okText: 'Delete',
+          cancelText: 'Cancel'
         });
 
         if (!confirmed) return;
 
         // Disable button
         btn.disabled = true;
-        btn.textContent = 'Διαγραφή...';
+        btn.textContent = 'Deleting...';
 
         try {
           const formData = new FormData();
           formData.append('filename', filename);
           formData.append('session_id', sessionId);
 
-          const resp = await fetch('/index/remove', {
+          const resp = await fetch(apiUrl('/index/remove'), {
             method: 'POST',
-            body: formData
+            body: formData,
+            headers: authHeaders()
           });
 
           const result = await resp.json();
@@ -1508,21 +1531,21 @@ async function loadIndexPanelData() {
           if (result && result.ok) {
             loadIndexPanelData();
           } else {
-            console.error('Σφάλμα διαγραφής:', result.error || 'Αποτυχία διαγραφής εγγράφου');
+            console.error('Delete error:', result.error || 'Failed to delete document');
             btn.disabled = false;
-            btn.textContent = 'Διαγραφή';
+            btn.textContent = 'Delete';
           }
         } catch (err) {
-          console.error('Σφάλμα δικτύου κατά τη διαγραφή:', err);
+          console.error('Network error while deleting:', err);
           btn.disabled = false;
-          btn.textContent = 'Διαγραφή';
+          btn.textContent = 'Delete';
         }
       });
     });
 
   } catch (err) {
     console.error('Error loading index panel data:', err);
-    indexContent.innerHTML = '<div class="index-empty"><p>Σφάλμα φόρτωσης δεδομένων</p></div>';
+    indexContent.innerHTML = '<div class="index-empty"><p>Error loading data</p></div>';
   }
 }
 

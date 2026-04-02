@@ -1,163 +1,78 @@
 # ChatDocuments
 
-Web εφαρμογή για συνομιλία με αρχεία PDF και PowerPoint μέσω FastAPI, vector search και Cloudflare AI.
+ChatDocuments is a document chat application that lets users upload PDF and PowerPoint files, build a searchable index, and ask grounded questions about the uploaded content.
 
-Το project περιλαμβάνει:
+## Stack
 
-- backend σε `FastAPI`
-- frontend σε στατικά αρχεία `HTML/CSS/JavaScript`
-- υποστήριξη για αρχεία `.pdf` και `.pptx`
-- αποθήκευση session data και chat history τοπικά
+- Python / FastAPI backend
+- FAISS-based vector index
+- Cloudflare AI for embeddings and chat
+- Static frontend with HTML, CSS, and vanilla JavaScript
+- Railway for backend deployment
+- Vercel for frontend deployment
 
-## Απαιτήσεις
+## Local Development
 
-Πριν την τοπική εγκατάσταση, βεβαιώσου ότι υπάρχουν:
+Requirements:
 
-- Python `3.11` ή νεότερο
+- Python 3.11+
 - `pip`
-- πρόσβαση σε Cloudflare AI
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
 
-Προαιρετικά:
-
-- Docker Desktop, αν προτιμάς εκτέλεση μέσω containers
-
-## Τοπική εγκατάσταση με Python
-
-### 1. Μετάβαση στο project
+Setup:
 
 ```bash
-cd /path/to/project
-```
-
-### 2. Δημιουργία virtual environment
-
-macOS / Linux:
-
-```bash
+cp .env.example .env
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-Windows PowerShell:
-
-```powershell
-py -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-### 3. Εγκατάσταση dependencies
-
-```bash
 pip install --upgrade pip
 pip install -r requirements.txt
-```
-
-### 4. Ρύθμιση μεταβλητών περιβάλλοντος
-
-Αντέγραψε το αρχείο παραδείγματος:
-
-macOS / Linux:
-
-```bash
-cp env.example .env
-```
-
-Windows:
-
-```powershell
-copy env.example .env
-```
-
-Συμπλήρωσε στο `.env`:
-
-```env
-CLOUDFLARE_ACCOUNT_ID=your_account_id
-CLOUDFLARE_API_TOKEN=your_api_token
-```
-
-### 5. Εκκίνηση της εφαρμογής
-
-```bash
 uvicorn src.server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 6. Άνοιγμα στον browser
+Required environment variables:
 
-Άνοιξε:
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `DATA_DIR=./data`
 
-[http://localhost:8000](http://localhost:8000)
+Open the app at:
 
-## Εκτέλεση με Docker
+- `http://localhost:8000`
 
-Αν θέλεις τοπική εκτέλεση χωρίς Python virtual environment:
+## Deployment
 
-### 1. Δημιούργησε το `.env`
+### Backend on Railway
 
-```bash
-cp env.example .env
-```
+1. Deploy this project as a Python service.
+2. Add a persistent volume mounted at `/data`.
+3. Configure:
+   - `CLOUDFLARE_API_TOKEN`
+   - `CLOUDFLARE_ACCOUNT_ID`
+   - `DATA_DIR=/data`
+   - `ALLOWED_ORIGINS=https://your-frontend.vercel.app`
+4. Railway starts the app from `Procfile` and uses `/ready` from `railway.json` for health checks.
 
-Συμπλήρωσε τα:
+If you skip the persistent volume, uploads, the FAISS index, and chat history will be lost on restart or redeploy.
 
-```env
-CLOUDFLARE_ACCOUNT_ID=your_account_id
-CLOUDFLARE_API_TOKEN=your_api_token
-```
+### Frontend on Vercel
 
-### 2. Εκκίνηση
+1. Deploy the repo as a static project.
+2. Set:
+   - `API_BASE_URL=https://your-backend.up.railway.app`
+3. `vercel.json` builds the static frontend from `static/` and generates `config.js` with the backend URL.
 
-```bash
-docker-compose up --build
-```
+### Recommended order
 
-Η εφαρμογή θα είναι διαθέσιμη στο:
+1. Deploy the backend on Railway.
+2. Copy the Railway public URL.
+3. Set that URL as `API_BASE_URL` on Vercel and redeploy.
+4. Add the Vercel URL to `ALLOWED_ORIGINS` on Railway.
+5. Redeploy Railway once more so the new CORS origin is loaded.
 
-[http://localhost:8000](http://localhost:8000)
+## Repository Layout
 
-## Δομή φακέλων
-
-```text
-src/        Backend λογική FastAPI και AI integration
-static/     Frontend αρχεία
-data/       Τοπικά uploads, index και chat history
-```
-
-Ο φάκελος `data/` δημιουργείται κατά την εκτέλεση αν δεν υπάρχει.
-
-## Συχνά προβλήματα
-
-### Λείπουν μεταβλητές περιβάλλοντος
-
-Αν δεις σφάλμα για `CLOUDFLARE_ACCOUNT_ID` ή `CLOUDFLARE_API_TOKEN`, έλεγξε ότι:
-
-- υπάρχει `.env`
-- οι τιμές είναι σωστές
-- το app ξεκινά από τον root φάκελο του project
-
-### Πρόβλημα στην εγκατάσταση `faiss-cpu`
-
-Σε ορισμένα συστήματα χρειάζονται ενημερωμένα εργαλεία `pip`, `setuptools`, `wheel`:
-
-```bash
-pip install --upgrade pip setuptools wheel
-```
-
-### Η εφαρμογή ανοίγει αλλά δεν απαντά
-
-Συνήθως αυτό σημαίνει ότι:
-
-- δεν έχουν οριστεί σωστά τα Cloudflare credentials
-- υπάρχει αποτυχία πρόσβασης προς το Cloudflare AI API
-- το αρχείο που ανέβηκε δεν είναι έγκυρο `.pdf` ή `.pptx`
-
-## Ανάπτυξη
-
-Για development, η βασική εντολή είναι:
-
-```bash
-uvicorn src.server:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Για καθαρό restart, σταμάτα το process και ξανατρέξε την ίδια εντολή.
+- `src/` - backend application code
+- `static/` - frontend assets
+- `.env.example` - local environment template
+- `Procfile`, `railway.json` - Railway deployment settings
+- `vercel.json` - Vercel build and runtime config

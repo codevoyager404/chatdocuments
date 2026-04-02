@@ -1,0 +1,6 @@
+{
+  "buildCommand": "rm -rf dist && mkdir -p dist/static && cp static/index.html dist/index.html && cp -R static/. dist/static/ && printf 'window.__APP_CONFIG__ = { API_BASE_URL: \"%s\" };\\n' \"$API_BASE_URL\" > dist/config.js",
+  "outputDirectory": "dist",
+  "cleanUrls": false,
+  "trailingSlash": false
+}

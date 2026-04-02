@@ -1,20 +1,18 @@
-# Εισαγωγή βιβλιοθηκών για τη διαχείριση συστήματος και αρχείων
 import os
 import sys
 import locale
 import uuid
 import shutil
+import secrets
 from datetime import datetime
 from typing import List, Optional, Tuple
 import json
 
-# Ρύθμιση για τη σωστή εμφάνιση ελληνικών χαρακτήρων σε περιβάλλον Windows
 if sys.platform.startswith('win'):
     import codecs
     sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
     sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
-# Ορισμός τοπικών ρυθμίσεων γλώσσας για την υποστήριξη Ελληνικών
 try:
     locale.setlocale(locale.LC_ALL, 'el_GR.UTF-8')
 except locale.Error:
@@ -23,14 +21,12 @@ except locale.Error:
     except locale.Error:
         pass
 
-# Εισαγωγή εργαλείων για τη δημιουργία της διαδικτυακής εφαρμογής (Web API)
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, FileResponse
 
-# Εισαγωγή των απαραίτητων μονάδων για την επεξεργασία AI και εγγράφων
 from .cf_ai import embed_texts, chat, build_rag_prompt, count_tokens_llama, validate_token_budget, calculate_optimal_k
 import requests
 from .index_store import Chunk, FaissStore
@@ -39,25 +35,22 @@ from .pptx_utils import extract_pptx_text_with_slides
 from .file_utils import safe_filename
 from .chat_history import ChatHistoryStore
 
-# Μέγιστο επιτρεπόμενο μέγεθος αρχείου (50MB)
 MAX_BYTES = 50 * 1024 * 1024
 
-# Διαχείριση σφαλμάτων κατά την επεξεργασία εγγράφων
 class FileIngestError(Exception):
     def __init__(self, reason: str, stage: str): 
         super().__init__(reason)
         self.reason = reason
         self.stage = stage
 
-# Καθορισμός διαδρομών για την αποθήκευση δεδομένων και ιστορικού
-DATA_DIR = "./data"
+DATA_DIR = os.getenv("DATA_DIR", "./data")
 INDEX_DIR = os.path.join(DATA_DIR, "index")
 UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
 LOG_DIR = os.path.join(DATA_DIR, "logs")
 CHAT_HISTORY_DIR = os.path.join(DATA_DIR, "chat_history")
+SESSION_OWNERS_DIR = os.path.join(DATA_DIR, "session_owners")
 LOG_PATH = os.path.join(LOG_DIR, "flow_log.txt")
 
-# Εντοπισμός των αρχείων δεδομένων για μια συγκεκριμένη συνεδρία
 def get_session_index_paths(session_id: str, create_if_missing: bool = False) -> Tuple[str, str]:
     session_dir = os.path.join(INDEX_DIR, f"session_{session_id}")
     if create_if_missing:
@@ -66,31 +59,94 @@ def get_session_index_paths(session_id: str, create_if_missing: bool = False) ->
     meta_path = os.path.join(session_dir, "metadata.json")
     return index_path, meta_path
 
-# Αρχικοποίηση της εφαρμογής FastAPI
-app = FastAPI(title="Chat PDF - Ελληνική Έκδοση")
+def get_session_upload_dir(session_id: str, create_if_missing: bool = False) -> str:
+    session_dir = os.path.join(UPLOADS_DIR, f"session_{session_id}")
+    if create_if_missing:
+        os.makedirs(session_dir, exist_ok=True)
+    return session_dir
 
-# Ρύθμιση CORS για την επικοινωνία μεταξύ Frontend και Backend
+def get_session_owner_path(session_id: str) -> str:
+    return os.path.join(SESSION_OWNERS_DIR, f"{session_id}.json")
+
+def _normalize_session_id(session_id: str) -> str:
+    value = (session_id or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="Session ID is required.")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+    if any(ch not in allowed for ch in value):
+        raise HTTPException(status_code=400, detail="Invalid session ID.")
+    return value
+
+def _require_session_key(x_session_key: Optional[str]) -> str:
+    value = (x_session_key or "").strip()
+    if not value:
+        raise HTTPException(status_code=401, detail="Missing session key.")
+    return value
+
+def _load_session_owner(session_id: str) -> Optional[dict]:
+    path = get_session_owner_path(session_id)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def _claim_or_verify_session(session_id: str, session_key: str) -> None:
+    session_id = _normalize_session_id(session_id)
+    session_key = _require_session_key(session_key)
+    owner = _load_session_owner(session_id)
+    if owner:
+        if owner.get("owner_key") != session_key:
+            raise HTTPException(status_code=403, detail="Access to this session is not allowed.")
+        return
+
+    os.makedirs(SESSION_OWNERS_DIR, exist_ok=True)
+    owner_data = {
+        "session_id": session_id,
+        "owner_key": session_key,
+        "created_at": datetime.now().isoformat(),
+        "nonce": secrets.token_hex(8)
+    }
+    with open(get_session_owner_path(session_id), "w", encoding="utf-8") as f:
+        json.dump(owner_data, f, ensure_ascii=False, indent=2)
+
+def _delete_session_owner(session_id: str) -> None:
+    try:
+        owner_path = get_session_owner_path(session_id)
+        if os.path.exists(owner_path):
+            os.remove(owner_path)
+    except Exception:
+        pass
+
+app = FastAPI(title="ChatDocuments")
+
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "").strip()
+if allowed_origins_env:
+    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+else:
+    allowed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allowed_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Σύνδεση φακέλου στατικών αρχείων για τη διεπαφή χρήστη
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Εξασφάλιση ύπαρξης των απαραίτητων φακέλων στο σύστημα
 def _ensure_dirs() -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(INDEX_DIR, exist_ok=True)
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     os.makedirs(LOG_DIR, exist_ok=True)
     os.makedirs(CHAT_HISTORY_DIR, exist_ok=True)
+    os.makedirs(SESSION_OWNERS_DIR, exist_ok=True)
 
-# Απενεργοποίηση προσωρινής αποθήκευσης για τα στατικά αρχεία
 class NoCacheStaticMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -106,15 +162,13 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(NoCacheStaticMiddleware)
 
-# Δημιουργία νέου αρχείου καταγραφής ενεργειών
 def _log_reset() -> None:
     try:
         with open(LOG_PATH, "w", encoding="utf-8") as f:
-            f.write(f"[#] Νέα συνεδρία: {datetime.now().isoformat(timespec='seconds')}\n")
+            f.write(f"[#] New session: {datetime.now().isoformat(timespec='seconds')}\n")
     except Exception:
         pass
 
-# Προσθήκη νέας καταγραφής με χρονοσήμανση
 def _log_add(line: str) -> None:
     try:
         ts = datetime.now().strftime("%H:%M:%S")
@@ -123,7 +177,6 @@ def _log_add(line: str) -> None:
     except Exception:
         pass
 
-# Επεξεργασία αρχείου: μεταφόρτωση, εξαγωγή κειμένου και κατάτμηση
 async def _process_one_file(up: UploadFile, session_id: str) -> Tuple[List[Chunk], List[str], str, dict]:
     original_filename = up.filename or f'file_{uuid.uuid4().hex}'
     original_ext = os.path.splitext(original_filename)[1].lower()
@@ -134,12 +187,12 @@ async def _process_one_file(up: UploadFile, session_id: str) -> Tuple[List[Chunk
     else:
         original_name = base_name
     
-    saved_file_path = os.path.join(UPLOADS_DIR, original_name)
-    tmp_path = os.path.join(UPLOADS_DIR, f"upload_{uuid.uuid4().hex}_{original_name}")
+    session_upload_dir = get_session_upload_dir(session_id, create_if_missing=True)
+    saved_file_path = os.path.join(session_upload_dir, original_name)
+    tmp_path = os.path.join(session_upload_dir, f"upload_{uuid.uuid4().hex}_{original_name}")
 
     bytes_written = 0
     try:
-        # Αποθήκευση του αρχείου στο δίσκο
         with open(tmp_path, "wb") as fout:
             while True:
                 chunk = await up.read(1024 * 1024)
@@ -147,38 +200,36 @@ async def _process_one_file(up: UploadFile, session_id: str) -> Tuple[List[Chunk
                     break
                 bytes_written += len(chunk)
                 if bytes_written > MAX_BYTES:
-                    raise FileIngestError("Πολύ μεγάλο αρχείο", "upload")
+                    raise FileIngestError("File is too large", "upload")
                 fout.write(chunk)
         await up.close()
         
         if bytes_written == 0:
-            raise FileIngestError("Άδειο αρχείο", "upload")
+            raise FileIngestError("Empty file", "upload")
 
-        # Εξαγωγή περιεχομένου ανάλογα με τον τύπο του αρχείου
         ext = original_ext if original_ext else os.path.splitext(original_name)[1].lower()
         if ext == ".pdf":
             pairs = extract_pdf_text_with_pages(tmp_path)
         elif ext == ".pptx":
             pairs = extract_pptx_text_with_slides(tmp_path)
         else:
-            ext_display = ext if ext else "(χωρίς κατάληξη)"
-            _log_add(f"Σφάλμα: Μη υποστηριζόμενος τύπος '{ext_display}' για το αρχείο '{original_filename}'")
+            ext_display = ext if ext else "(no extension)"
+            _log_add(f"Error: Unsupported file type '{ext_display}' for '{original_filename}'")
             raise FileIngestError(
-                f"Μη υποστηριζόμενος τύπος αρχείου: '{ext_display}'. "
-                f"Υποστηριζόμενοι τύποι: .pdf, .pptx. Αρχικό όνομα αρχείου: '{original_filename}'",
+                f"Unsupported file type: '{ext_display}'. "
+                f"Supported types: .pdf, .pptx. Original filename: '{original_filename}'",
                 "validate"
             )
 
-        # Έλεγχος μεγέθους εγγράφου σε tokens
         full_text = "\n\n".join([text for _, text in pairs if text.strip()])
         total_tokens = count_tokens_llama(full_text)
         MAX_TOKENS_PER_FILE = 50000
         
         if total_tokens > MAX_TOKENS_PER_FILE:
             raise FileIngestError(
-                f"Το έγγραφο είναι πολύ μεγάλο (~{total_tokens:,} tokens). "
-                f"Μέγιστο όριο: {MAX_TOKENS_PER_FILE:,} tokens. "
-                f"Παρακαλώ χωρίστε το έγγραφο σε μικρότερα τμήματα.",
+                f"The document is too large (~{total_tokens:,} tokens). "
+                f"Maximum allowed: {MAX_TOKENS_PER_FILE:,} tokens. "
+                f"Please split the document into smaller parts.",
                 "token_limit"
             )
 
@@ -215,7 +266,7 @@ async def _process_one_file(up: UploadFile, session_id: str) -> Tuple[List[Chunk
         }
         
         # Αποθήκευση των πληροφοριών σε αρχείο JSON
-        json_path = os.path.join(UPLOADS_DIR, f"{os.path.splitext(original_name)[0]}.json")
+        json_path = os.path.join(session_upload_dir, f"{os.path.splitext(original_name)[0]}.json")
         try:
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=2)
@@ -242,7 +293,8 @@ async def index_files(
     file: Optional[UploadFile] = File(default=None, description="Ένα μεμονωμένο αρχείο προς μεταφόρτωση"),
     session_id: str = Form(default=None, description="Το ID της τρέχουσας συνεδρίας"),
     strict: bool = Form(default=False, description="Αυστηρή λειτουργία (διακοπή σε σφάλμα)"),
-    manifest: Optional[str] = Form(default=None, description="Λίστα αναμενόμενων αρχείων σε μορφή JSON")
+    manifest: Optional[str] = Form(default=None, description="Λίστα αναμενόμενων αρχείων σε μορφή JSON"),
+    x_session_key: Optional[str] = Header(default=None)
 ):
     _ensure_dirs()
     
@@ -252,17 +304,19 @@ async def index_files(
     if file:
         inputs.append(file)
     if not inputs:
-        return JSONResponse({"ok": False, "error": "Δεν επιλέχθηκαν αρχεία.", "session_id": session_id}, status_code=400)
+        return JSONResponse({"ok": False, "error": "No files were selected.", "session_id": session_id}, status_code=400)
 
     if not session_id:
         session_id = str(uuid.uuid4())
+    session_id = _normalize_session_id(session_id)
+    _claim_or_verify_session(session_id, x_session_key)
 
     expected = set()
     if manifest:
         try:
             expected = set(json.loads(manifest))
         except Exception:
-            return JSONResponse({"ok": False, "error": "Μη έγκυρο manifest.", "session_id": session_id}, status_code=400)
+            return JSONResponse({"ok": False, "error": "Invalid manifest.", "session_id": session_id}, status_code=400)
 
     # Υπολογισμός υπαρχόντων δεδομένων στη συνεδρία
     index_path, meta_path = get_session_index_paths(session_id, create_if_missing=False)
@@ -316,34 +370,34 @@ async def index_files(
                 "pages": doc_metadata.get("pages", 0)
             })
         except FileIngestError as e:
-            failures.append({"name": up.filename or "Άγνωστο", "reason": e.reason, "stage": e.stage})
+            failures.append({"name": up.filename or "Unknown", "reason": e.reason, "stage": e.stage})
         except Exception as e:
-            failures.append({"name": up.filename or "Άγνωστο", "reason": f"Απροσδόκητο σφάλμα: {str(e)}", "stage": "άγνωστο"})
+            failures.append({"name": up.filename or "Unknown", "reason": f"Unexpected error: {str(e)}", "stage": "unknown"})
 
     received_names = {p["name"] for p in processed} | {f["name"] for f in failures}
     missing = [n for n in expected if n not in received_names]
-    failures.extend({"name": n, "reason": "Δεν παραλήφθηκε", "stage": "upload"} for n in missing)
+    failures.extend({"name": n, "reason": "File was not received", "stage": "upload"} for n in missing)
 
     if strict and failures:
         return JSONResponse({"ok": False, "mode": "strict", "processed": processed, "failed": failures, "session_id": session_id}, status_code=409)
 
     if not all_texts:
         if failures:
-            error_msg = "Δεν υπάρχουν έγκυρα έγγραφα. "
+            error_msg = "No valid documents were processed. "
             if len(failures) == 1:
-                error_msg += f"Το αρχείο '{failures[0]['name']}' απέτυχε: {failures[0].get('reason', 'Άγνωστο σφάλμα')}"
+                error_msg += f"File '{failures[0]['name']}' failed: {failures[0].get('reason', 'Unknown error')}"
             else:
-                error_msg += f"{len(failures)} αρχεία απέτυχαν. Κάντε κλικ στο κουμπί ℹ για λεπτομέρειες."
+                error_msg += f"{len(failures)} files failed. Check the details for more information."
         else:
-            error_msg = "Δεν υπάρχουν έγκυρα έγγραφα."
+            error_msg = "No valid documents were processed."
         
         try:
             session_dir = os.path.dirname(index_path)
             if os.path.exists(session_dir) and not os.listdir(session_dir):
                 os.rmdir(session_dir)
-                _log_add(f"Καθαρισμός κενού καταλόγου συνεδρίας: {session_dir}")
+                _log_add(f"Cleaned empty session directory: {session_dir}")
         except Exception as cleanup_error:
-            _log_add(f"Προειδοποίηση: Αποτυχία καθαρισμού καταλόγου συνεδρίας: {cleanup_error}")
+            _log_add(f"Warning: Failed to clean session directory: {cleanup_error}")
         
         return JSONResponse({"ok": False, "error": error_msg, "failed": failures, "session_id": session_id}, status_code=400)
 
@@ -388,18 +442,18 @@ async def index_files(
     except requests.exceptions.HTTPError as e:
         status = getattr(getattr(e, "response", None), "status_code", 502) or 502
         if status == 429:
-            msg = "Όριο ταχύτητας (429). Περιμένετε λίγο και ξαναδοκιμάστε."
+            msg = "Rate limit exceeded (429). Please try again shortly."
         elif status in (401, 403):
-            msg = "Ανεπαρκή δικαιώματα (401/403)."
+            msg = "Insufficient permissions (401/403)."
         else:
-            msg = f"Σφάλμα upstream ({status})."
-        _log_add(f"Σφάλμα HTTP: {msg}")
+            msg = f"Upstream error ({status})."
+        _log_add(f"HTTP error: {msg}")
         return JSONResponse({"ok": False, "error": msg, "processed": processed, "failed": failures, "session_id": session_id}, status_code=status)
     except Exception as e:
         import traceback
         error_msg = str(e)
         tb = traceback.format_exc()
-        _log_add(f"Σφάλμα διακομιστή: {error_msg}")
+        _log_add(f"Server error: {error_msg}")
         _log_add(f"Traceback: {tb}")
         print(f"ERROR in index_files: {error_msg}", file=sys.stderr)
         print(tb, file=sys.stderr)
@@ -409,31 +463,35 @@ async def index_files(
             if os.path.exists(session_dir) and not os.path.exists(index_path) and not os.path.exists(meta_path):
                 if not os.listdir(session_dir):
                     os.rmdir(session_dir)
-                    _log_add(f"Καθαρισμός κενού καταλόγου συνεδρίας μετά από σφάλμα: {session_dir}")
+                    _log_add(f"Cleaned empty session directory after error: {session_dir}")
         except Exception as cleanup_error:
-            _log_add(f"Προειδοποίηση: Αποτυχία καθαρισμού καταλόγου συνεδρίας: {cleanup_error}")
+            _log_add(f"Warning: Failed to clean session directory: {cleanup_error}")
         
-        return JSONResponse({"ok": False, "error": f"Σφάλμα διακομιστή: {error_msg}", "processed": processed, "failed": failures, "session_id": session_id}, status_code=500)
+        return JSONResponse({"ok": False, "error": f"Server error: {error_msg}", "processed": processed, "failed": failures, "session_id": session_id}, status_code=500)
 
 # Υποβολή ερωτήματος και λήψη απάντησης από το μοντέλο AI
 @app.post("/query")
 async def query_pdf(
-    question: str = Form(..., description="Η ερώτηση του χρήστη προς τα έγγραφα"),
-    k: int = Form(5, description="Αριθμός κομματιών κειμένου (chunks) προς ανάκτηση"),
-    use_llm: str = Form("1", description="Χρήση LLM για απάντηση (1=Ναι, 0=Όχι)"),
-    llm_extractive: str = Form("0", description="Λειτουργία εξόρυξης κειμένου (Extractive Mode)"),
-    session_id: str = Form(default=None, description="Το ID της τρέχουσας συνεδρίας")
+    question: str = Form(..., description="User question about the uploaded documents"),
+    k: int = Form(5, description="Number of chunks to retrieve"),
+    use_llm: str = Form("1", description="Use the LLM for answering (1=yes, 0=no)"),
+    llm_extractive: str = Form("0", description="Extractive answer mode"),
+    session_id: str = Form(default=None, description="Current session ID"),
+    x_session_key: Optional[str] = Header(default=None)
 ):
     _ensure_dirs()
 
     if not session_id:
         return JSONResponse({
             "ok": False,
-            "error": "Δεν υπάρχει ενεργή συνεδρία. Ξεκινήστε νέα για να συνεχίσετε."
+            "error": "No active session found. Start a new chat to continue."
         }, status_code=400)
 
+    session_id = _normalize_session_id(session_id)
+    _claim_or_verify_session(session_id, x_session_key)
+
     if not (question or "").strip():
-        return JSONResponse({"ok": False, "error": "Η ερώτηση δεν μπορεί να είναι κενή."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "The question cannot be empty."}, status_code=400)
 
     index_path, meta_path = get_session_index_paths(session_id, create_if_missing=False)
     store = FaissStore(dim=1024, index_path=index_path, meta_path=meta_path)
@@ -443,7 +501,7 @@ async def query_pdf(
         if not store.metadata:
             return JSONResponse({
                 "ok": False,
-                "error": "Δεν έχουν ανέβει ακόμα έγγραφα. Ανεβάστε ένα PDF ή PowerPoint."
+                "error": "No documents uploaded yet. Upload a PDF or PowerPoint file first."
             }, status_code=400)
 
         total_chunks = len(store.metadata)
@@ -457,23 +515,23 @@ async def query_pdf(
                 total_tokens=total_tokens
             )
             k = max(suggested_k, 8)
-            _log_add(f"Δυναμικός υπολογισμός k: χρήση k={k} (σύνολο_chunks={total_chunks}, σελίδες={total_pages})")
+            _log_add(f"Dynamic k selection: using k={k} (total_chunks={total_chunks}, pages={total_pages})")
 
         # Μετατροπή ερώτησης σε διάνυσμα και αναζήτηση σχετικών τμημάτων
         q_vec = embed_texts([question])[0]
-        _log_add(f"Ερώτηση: '{question}' | k={k} | use_llm={use_llm} | extractive={llm_extractive} | session_id={session_id}")
+        _log_add(f"Question: '{question}' | k={k} | use_llm={use_llm} | extractive={llm_extractive} | session_id={session_id}")
 
         results = store.search(q_vec, k=k)
         try:
             for rank, (score, c) in enumerate(results, start=1):
-                _log_add(f"Κορυφαίο{rank}: πηγή='{c.source}', σελίδα={c.page}, score={score:.4f}")
+                _log_add(f"Top{rank}: source='{c.source}', page={c.page}, score={score:.4f}")
         except Exception:
             pass
 
         if not results:
             return JSONResponse({
                 "ok": False,
-                "error": "Δεν βρέθηκαν σχετικά αποσπάσματα για αυτή την ερώτηση.",
+                "error": "No relevant excerpts were found for this question.",
                 "session_id": session_id
             }, status_code=400)
 
@@ -518,34 +576,36 @@ async def query_pdf(
         difference = abs(python_tokens - api_prompt_tokens)
         percentage_diff = (difference / api_prompt_tokens * 100) if api_prompt_tokens > 0 else 0
         
-        _log_add(f"Σύγκριση tokens: Python={python_tokens}, API={api_prompt_tokens}, διαφορά={difference} ({percentage_diff:.2f}%)")
+        _log_add(f"Token comparison: Python={python_tokens}, API={api_prompt_tokens}, diff={difference} ({percentage_diff:.2f}%)")
         
         return {"ok": True, "answer": answer, "sources": sources, "session_id": session_id}
 
     except requests.exceptions.HTTPError as e:
         status = getattr(getattr(e, "response", None), "status_code", 502) or 502
         if status == 429:
-            msg = "Όριο ταχύτητας (429). Ξαναδοκιμάστε μετά."
+            msg = "Rate limit exceeded (429). Please try again later."
         elif status in (401, 403):
-            msg = "Ανεπαρκή δικαιώματα (401/403)."
+            msg = "Insufficient permissions (401/403)."
         else:
-            msg = f"Σφάλμα upstream ({status})."
+            msg = f"Upstream error ({status})."
         return JSONResponse({"ok": False, "error": msg, "session_id": session_id}, status_code=status)
     except Exception as e:
         import traceback
         error_msg = str(e)
         tb = traceback.format_exc()
-        _log_add(f"Σφάλμα σε query_pdf: {error_msg}")
+        _log_add(f"Query error: {error_msg}")
         _log_add(f"Traceback: {tb}")
         print(f"ERROR in query_pdf: {error_msg}", file=sys.stderr)
         print(tb, file=sys.stderr)
-        return JSONResponse({"ok": False, "error": "Σφάλμα διακομιστή κατά την αναζήτηση.", "session_id": session_id}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Server error while searching.", "session_id": session_id}, status_code=500)
 
 
 # Ανάκτηση στατιστικών στοιχείων χρήσης της συνεδρίας
 @app.get("/sessions/{session_id}/stats")
-async def get_session_stats(session_id: str):
+async def get_session_stats(session_id: str, x_session_key: Optional[str] = Header(default=None)):
     _ensure_dirs()
+    session_id = _normalize_session_id(session_id)
+    _claim_or_verify_session(session_id, x_session_key)
     
     try:
         index_path, meta_path = get_session_index_paths(session_id, create_if_missing=False)
@@ -620,13 +680,18 @@ async def get_session_stats(session_id: str):
         import traceback
         print(f"ERROR in get_session_stats: {str(e)}", file=sys.stderr)
         print(traceback.format_exc(), file=sys.stderr)
-        return JSONResponse({"ok": False, "error": "Σφάλμα διακομιστή κατά την ανάκτηση στατιστικών."}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Server error while loading session stats."}, status_code=500)
 
 
 # Επιστροφή της αρχικής σελίδας της εφαρμογής
 @app.get("/")
 async def root() -> FileResponse:
     return FileResponse("static/index.html")
+
+@app.get("/ready")
+async def ready():
+    _ensure_dirs()
+    return {"ok": True, "status": "ready"}
 
 # Προβολή του αρχείου καταγραφής
 @app.get("/log")
@@ -639,13 +704,17 @@ async def get_log() -> FileResponse:
 # Διαγραφή ολόκληρης της συνεδρίας και των δεδομένων της
 @app.post("/sessions/remove")
 async def remove_session(
-    session_id: str = Form(..., description="Το ID της συνεδρίας προς διαγραφή")
+    session_id: str = Form(..., description="Session ID to delete"),
+    x_session_key: Optional[str] = Header(default=None)
 ):
     _ensure_dirs()
     try:
+        session_id = _normalize_session_id(session_id)
+        _claim_or_verify_session(session_id, x_session_key)
         session_dir = os.path.join(INDEX_DIR, f"session_{session_id}")
         index_path = os.path.join(session_dir, "index.faiss")
         meta_path = os.path.join(session_dir, "metadata.json")
+        upload_dir = get_session_upload_dir(session_id, create_if_missing=False)
         
         removed_count = 0
         
@@ -670,8 +739,15 @@ async def remove_session(
                     os.rmdir(session_dir)
             except Exception:
                 pass
+
+        try:
+            if os.path.exists(upload_dir):
+                shutil.rmtree(upload_dir)
+        except Exception:
+            pass
         
         chat_history_deleted = chat_history_store.delete_session(session_id)
+        _delete_session_owner(session_id)
         
         return {
             "ok": True, 
@@ -679,28 +755,35 @@ async def remove_session(
             "chat_history_deleted": chat_history_deleted
         }
     except Exception as e:
-        return JSONResponse({"ok": False, "error": "Σφάλμα διακομιστή κατά τη διαγραφή συνεδρίας."}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Server error while deleting the session."}, status_code=500)
 
 
 # Αφαίρεση συγκεκριμένου αρχείου από το ευρετήριο
 @app.post("/index/remove")
 async def remove_indexed_file(
-    filename: str = Form(..., description="Το όνομα του αρχείου προς διαγραφή"),
-    session_id: str = Form(default=None, description="Το ID της συνεδρίας")
+    filename: str = Form(..., description="Filename to remove"),
+    session_id: str = Form(default=None, description="Session ID"),
+    x_session_key: Optional[str] = Header(default=None)
 ):
     _ensure_dirs()
     
     if not session_id:
-        return JSONResponse({"ok": False, "error": "Session ID απαιτείται."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Session ID is required."}, status_code=400)
     
+    session_id = _normalize_session_id(session_id)
+    _claim_or_verify_session(session_id, x_session_key)
+
     try:
-        file_path = os.path.join(UPLOADS_DIR, filename)
+        session_upload_dir = get_session_upload_dir(session_id, create_if_missing=False)
+        file_path = os.path.join(session_upload_dir, filename)
         if os.path.exists(file_path):
             os.remove(file_path)
-        
-        json_path = os.path.join(UPLOADS_DIR, f"{os.path.splitext(filename)[0]}.json")
+
+        json_path = os.path.join(session_upload_dir, f"{os.path.splitext(filename)[0]}.json")
         if os.path.exists(json_path):
             os.remove(json_path)
+        if os.path.exists(session_upload_dir) and not os.listdir(session_upload_dir):
+            os.rmdir(session_upload_dir)
     except Exception:
         pass
 
@@ -749,55 +832,69 @@ async def remove_indexed_file(
     except requests.exceptions.HTTPError as e:
         status = getattr(getattr(e, "response", None), "status_code", 502) or 502
         if status == 429:
-            msg = "Όριο ταχύτητας (429). Ξαναδοκιμάστε μετά."
+            msg = "Rate limit exceeded (429). Please try again later."
         elif status in (401, 403):
-            msg = "Ανεπαρκή δικαιώματα (401/403)."
+            msg = "Insufficient permissions (401/403)."
         else:
-            msg = f"Σφάλμα upstream ({status})."
+            msg = f"Upstream error ({status})."
         return JSONResponse({"ok": False, "error": msg}, status_code=status)
     except Exception as e:
-        return JSONResponse({"ok": False, "error": "Σφάλμα διακομιστή κατά την αφαίρεση αρχείου."}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Server error while removing the file."}, status_code=500)
 
 
 # Αποθήκευση του ιστορικού συνομιλίας
 @app.post("/chat/history/save")
 async def save_chat_history(
-    session_id: str = Form(..., description="Το ID της συνεδρίας για αποθήκευση"),
-    messages: str = Form(..., description="Τα μηνύματα της συνομιλίας σε μορφή JSON string"),
-    title: str = Form(default=None, description="Ο τίτλος της συνομιλίας"),
-    timestamp: int = Form(default=None, description="Timestamp δημιουργίας")
+    session_id: str = Form(..., description="Session ID to save"),
+    messages: str = Form(..., description="Chat messages as a JSON string"),
+    title: str = Form(default=None, description="Chat title"),
+    timestamp: int = Form(default=None, description="Creation timestamp"),
+    x_session_key: Optional[str] = Header(default=None)
 ):
     try:
+        session_id = _normalize_session_id(session_id)
+        _claim_or_verify_session(session_id, x_session_key)
         messages_list = json.loads(messages)
-        chat_history_store.save_messages(session_id, messages_list, title=title, timestamp=timestamp)
+        chat_history_store.save_messages(session_id, messages_list, title=title, timestamp=timestamp, owner_key=_require_session_key(x_session_key))
         return {"ok": True, "session_id": session_id, "message_count": len(messages_list)}
     except json.JSONDecodeError:
-        return JSONResponse({"ok": False, "error": "Μη έγκυρα δεδομένα JSON."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Invalid JSON payload."}, status_code=400)
+    except HTTPException as e:
+        return JSONResponse({"ok": False, "error": e.detail}, status_code=e.status_code)
     except Exception as e:
-        return JSONResponse({"ok": False, "error": "Σφάλμα κατά την αποθήκευση ιστορικού."}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Failed to save chat history."}, status_code=500)
 
 # Φόρτωση του ιστορικού συνομιλίας μιας συνεδρίας
 @app.get("/chat/history/load")
-async def load_chat_history(session_id: str):
+async def load_chat_history(session_id: str, x_session_key: Optional[str] = Header(default=None)):
     try:
+        session_id = _normalize_session_id(session_id)
+        _claim_or_verify_session(session_id, x_session_key)
         messages = chat_history_store.load_messages(session_id)
         return {"ok": True, "session_id": session_id, "messages": messages}
+    except HTTPException as e:
+        return JSONResponse({"ok": False, "error": e.detail}, status_code=e.status_code)
     except Exception as e:
-        return JSONResponse({"ok": False, "error": "Σφάλμα κατά τη φόρτωση ιστορικού."}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Failed to load chat history."}, status_code=500)
 
 @app.get("/chat/history/list")
-async def list_chat_sessions():
+async def list_chat_sessions(x_session_key: Optional[str] = Header(default=None)):
     try:
-        sessions = chat_history_store.list_sessions()
+        sessions = chat_history_store.list_sessions(owner_key=_require_session_key(x_session_key))
         return {"ok": True, "sessions": sessions}
+    except HTTPException as e:
+        return JSONResponse({"ok": False, "error": e.detail}, status_code=e.status_code)
     except Exception as e:
-        return JSONResponse({"ok": False, "error": "Σφάλμα κατά την ανάκτηση λίστας."}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Failed to load chat list."}, status_code=500)
 
 @app.post("/chat/history/delete")
 async def delete_chat_history(
-    session_id: str = Form(..., description="Το ID της συνεδρίας προς διαγραφή")
+    session_id: str = Form(..., description="Session ID to delete"),
+    x_session_key: Optional[str] = Header(default=None)
 ):
     try:
+        session_id = _normalize_session_id(session_id)
+        _claim_or_verify_session(session_id, x_session_key)
         success = chat_history_store.delete_session(session_id)
         
         index_deleted = False
@@ -805,6 +902,7 @@ async def delete_chat_history(
             session_dir = os.path.join(INDEX_DIR, f"session_{session_id}")
             index_path = os.path.join(session_dir, "index.faiss")
             meta_path = os.path.join(session_dir, "metadata.json")
+            upload_dir = get_session_upload_dir(session_id, create_if_missing=False)
             if os.path.exists(index_path) or os.path.exists(meta_path):
                 for p in (index_path, meta_path):
                     if os.path.exists(p):
@@ -815,8 +913,11 @@ async def delete_chat_history(
                     os.rmdir(session_dir)
                 
                 index_deleted = True
+            if os.path.exists(upload_dir):
+                shutil.rmtree(upload_dir)
         except Exception as e:
-            _log_add(f"Προειδοποίηση: Αποτυχία διαγραφής index για session '{session_id}': {e}")
+            _log_add(f"Warning: Failed to delete index for session '{session_id}': {e}")
+        _delete_session_owner(session_id)
         
         if success:
             return {
@@ -826,6 +927,8 @@ async def delete_chat_history(
                 "index_deleted": index_deleted
             }
         else:
-            return {"ok": True, "session_id": session_id, "deleted": False, "message": "Δεν βρέθηκε ιστορικό."}
+            return {"ok": True, "session_id": session_id, "deleted": False, "message": "Chat history was not found."}
+    except HTTPException as e:
+        return JSONResponse({"ok": False, "error": e.detail}, status_code=e.status_code)
     except Exception as e:
-        return JSONResponse({"ok": False, "error": "Σφάλμα κατά τη διαγραφή ιστορικού."}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Failed to delete chat history."}, status_code=500)
